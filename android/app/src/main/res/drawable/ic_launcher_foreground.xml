@@ -1,17 +1,10 @@
 <?xml version="1.0" encoding="utf-8"?>
-<vector xmlns:android="http://schemas.android.com/apk/res/android"
-    android:width="108dp"
-    android:height="108dp"
-    android:viewportWidth="108"
-    android:viewportHeight="108">
-    <!-- A drawstring pouch: Kese. -->
-    <path
-        android:fillColor="#3FD6A0"
-        android:pathData="M42,36 L66,36 L60,46 C72,52 78,62 78,70 C78,80 68,84 54,84 C40,84 30,80 30,70 C30,62 36,52 48,46 Z" />
-    <path
-        android:fillColor="#0F2219"
-        android:pathData="M45,45 L63,45 L63,48.5 L45,48.5 Z" />
-    <path
-        android:fillColor="#0F2219"
-        android:pathData="M50,58 L58,58 L54,64 L58,64 L58,67 L55.5,67 L55.5,70 L58,70 L58,73 L50,73 L50,70 L52.5,70 L52.5,67 L50,67 L50,64 L54,64 Z" />
+<vector xmlns:android="http://schemas.android.com/apk/res/android" xmlns:aapt="http://schemas.android.com/aapt" android:width="108dp" android:height="108dp" android:viewportWidth="108" android:viewportHeight="108">
+    <path android:pathData="M42.5 31 C42.5 28 45.5 27 47.5 28.8 C49.5 26.6 52.5 26.6 54 28.6 C55.5 26.6 58.5 26.6 60.5 28.8 C62.5 27 65.5 28 65.5 31 C65.5 34 63.5 36.5 62 39 L46 39 C44.5 36.5 42.5 34 42.5 31 Z"><aapt:attr name="android:fillColor"><gradient android:type="linear" android:startX="54" android:startY="27" android:endX="54" android:endY="39"><item android:offset="0" android:color="#FFFFD27A"/><item android:offset="1" android:color="#FFD9851F"/></gradient></aapt:attr></path>
+    <path android:pathData="M46 41 C36 47.5 28.5 58 28.5 67 C28.5 77.5 39 82 54 82 C69 82 79.5 77.5 79.5 67 C79.5 58 72 47.5 62 41 Z"><aapt:attr name="android:fillColor"><gradient android:type="linear" android:startX="54" android:startY="40" android:endX="54" android:endY="82"><item android:offset="0" android:color="#FFFFE09A"/><item android:offset="1" android:color="#FFEE9A2E"/></gradient></aapt:attr></path>
+    <path android:pathData="M46.5 37.5 H61.5 A2.75 2.75 0 0 1 61.5 43 H46.5 A2.75 2.75 0 0 1 46.5 37.5 Z" android:fillColor="#FF8A4B12"/>
+    <path android:pathData="M38.5 54.5 C35.5 58.5 34 63 34.5 68" android:strokeColor="#61FFFFFF" android:strokeWidth="2.6" android:strokeLineCap="round" android:strokeLineJoin="round" />
+    <path android:pathData="M50.5 51 V73 C58 73 63.5 69 64 62" android:strokeColor="#FF21174A" android:strokeWidth="3.5" android:strokeLineCap="round" android:strokeLineJoin="round" />
+    <path android:pathData="M45 62.5 L58 58.5" android:strokeColor="#FF21174A" android:strokeWidth="3.5" android:strokeLineCap="round" android:strokeLineJoin="round" />
+    <path android:pathData="M45 68.2 L58 64.2" android:strokeColor="#FF21174A" android:strokeWidth="3.5" android:strokeLineCap="round" android:strokeLineJoin="round" />
 </vector>
