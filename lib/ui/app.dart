@@ -1,9 +1,14 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 
+import '../core/phone.dart';
 import '../core/store.dart';
 import 'analysis.dart';
 import 'home.dart';
+import 'lock.dart';
+import 'phone_sync.dart';
 import 'quick_add.dart';
 import 'settings.dart';
 import 'theme.dart';
@@ -11,9 +16,11 @@ import 'transactions.dart';
 import 'widgets.dart';
 
 class KeseApp extends StatelessWidget {
-  const KeseApp({super.key, required this.store});
+  const KeseApp({super.key, required this.store, this.phone = const NoPhone(), this.sync});
 
   final Store store;
+  final Phone phone;
+  final PhoneSync? sync;
 
   @override
   Widget build(BuildContext context) => StoreScope(
@@ -23,7 +30,7 @@ class KeseApp extends StatelessWidget {
           builder: (context, _) => MaterialApp(
             title: 'Kese',
             debugShowCheckedModeBanner: false,
-            theme: buildTheme(themeById(store.data.theme)),
+            theme: buildTheme(resolveTheme(store.data)),
             locale: const Locale('tr', 'TR'),
             supportedLocales: const [Locale('tr', 'TR')],
             localizationsDelegates: const [
@@ -31,7 +38,11 @@ class KeseApp extends StatelessWidget {
               GlobalWidgetsLocalizations.delegate,
               GlobalCupertinoLocalizations.delegate,
             ],
-            home: store.data.onboarded ? const Shell() : const Welcome(),
+            builder: (context, child) => PhoneScope(
+              phone: phone,
+              child: LockGate(child: child!),
+            ),
+            home: store.data.onboarded ? Shell(sync: sync) : const Welcome(),
           ),
         ),
       );
@@ -88,7 +99,9 @@ class Welcome extends StatelessWidget {
 }
 
 class Shell extends StatefulWidget {
-  const Shell({super.key});
+  const Shell({super.key, this.sync});
+
+  final PhoneSync? sync;
 
   @override
   State<Shell> createState() => _ShellState();
@@ -99,11 +112,27 @@ class _ShellState extends State<Shell> with WidgetsBindingObserver {
 
   int _page = 0;
   Store? _store;
+  StreamSubscription<void>? _quickAdds;
+  bool _quickAddOpen = false;
 
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+  }
+
+  Future<void> _listenForQuickAdd() async {
+    final phone = PhoneScope.of(context);
+    _quickAdds = phone.quickAddRequests.listen((_) => _openQuickAdd());
+    if (await phone.openedForQuickAdd()) _openQuickAdd();
+  }
+
+  /// Pressing the widget's button twice must not stack two sheets.
+  Future<void> _openQuickAdd() async {
+    if (_quickAddOpen || !mounted) return;
+    _quickAddOpen = true;
+    await showQuickAdd(context);
+    _quickAddOpen = false;
   }
 
   @override
@@ -114,11 +143,13 @@ class _ShellState extends State<Shell> with WidgetsBindingObserver {
       _store?.saveError.removeListener(_showSaveError);
       _store = store..saveError.addListener(_showSaveError);
     }
+    if (_quickAdds == null) unawaited(_listenForQuickAdd());
   }
 
   @override
   void dispose() {
     _store?.saveError.removeListener(_showSaveError);
+    _quickAdds?.cancel();
     WidgetsBinding.instance.removeObserver(this);
     super.dispose();
   }
@@ -126,7 +157,10 @@ class _ShellState extends State<Shell> with WidgetsBindingObserver {
   /// "Today" may have moved on while the app sat in the background.
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    if (state == AppLifecycleState.resumed) setState(() {});
+    if (state == AppLifecycleState.resumed) {
+      setState(() {});
+      unawaited(widget.sync?.run());
+    }
   }
 
   void _showSaveError() {
@@ -156,7 +190,7 @@ class _ShellState extends State<Shell> with WidgetsBindingObserver {
         ),
         floatingActionButton: FloatingActionButton(
           tooltip: 'Hızlı ekle',
-          onPressed: () => showQuickAdd(context),
+          onPressed: _openQuickAdd,
           child: const Icon(Icons.add),
         ),
         bottomNavigationBar: NavigationBar(

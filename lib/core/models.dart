@@ -115,6 +115,94 @@ class Transaction {
   }
 }
 
+class SavingsGoal {
+  const SavingsGoal({
+    required this.id,
+    required this.title,
+    required this.target,
+    required this.saved,
+    required this.createdAt,
+  });
+
+  final String id;
+  final String title;
+
+  /// Whole kuruş.
+  final int target;
+  final int saved;
+  final String createdAt;
+
+  bool get reached => saved >= target;
+  int get remaining => target - saved < 0 ? 0 : target - saved;
+
+  SavingsGoal copyWith({String? title, int? target, int? saved}) => SavingsGoal(
+        id: id,
+        title: title ?? this.title,
+        target: target ?? this.target,
+        saved: saved ?? this.saved,
+        createdAt: createdAt,
+      );
+
+  Map<String, Object?> toJson() => {
+        'id': id,
+        'title': title,
+        'target': target,
+        'saved': saved,
+        'createdAt': createdAt,
+      };
+
+  factory SavingsGoal.fromJson(Object? json) {
+    if (json is! Map) throw const FormatException('Hedef kaydı okunamadı.');
+    final id = json['id'];
+    final title = json['title'];
+    final target = json['target'];
+    final saved = json['saved'];
+    final createdAt = json['createdAt'];
+    final valid = id is String &&
+        id.isNotEmpty &&
+        title is String &&
+        title.trim().isNotEmpty &&
+        target is int &&
+        target > 0 &&
+        target <= maxAmount &&
+        saved is int &&
+        saved >= 0 &&
+        saved <= maxAmount &&
+        createdAt is String &&
+        DateTime.tryParse(createdAt) != null;
+    if (!valid) throw const FormatException('Hedef kaydı geçersiz.');
+    return SavingsGoal(
+      id: id,
+      title: title,
+      target: target,
+      saved: saved,
+      createdAt: createdAt,
+    );
+  }
+}
+
+/// The two colors a user picks; everything else is derived from them.
+class CustomColors {
+  const CustomColors({required this.accent, required this.background});
+
+  /// Opaque ARGB.
+  final int accent;
+  final int background;
+
+  Map<String, int> toJson() => {'accent': accent, 'background': background};
+
+  factory CustomColors.fromJson(Object? json) {
+    if (json is! Map) throw const FormatException('Özel tema geçersiz.');
+    final accent = json['accent'];
+    final background = json['background'];
+    bool isColor(Object? value) => value is int && value >= 0xFF000000 && value <= 0xFFFFFFFF;
+    if (!isColor(accent) || !isColor(background)) {
+      throw const FormatException('Özel tema geçersiz.');
+    }
+    return CustomColors(accent: accent as int, background: background as int);
+  }
+}
+
 /// How often the user accepted or dismissed one kind of insight.
 class FeedbackCount {
   const FeedbackCount({this.accepted = 0, this.dismissed = 0});
@@ -131,10 +219,19 @@ class AppData {
     Map<Category, int>? limits,
     Map<String, FeedbackCount>? feedback,
     Map<String, String>? dismissed,
+    List<SavingsGoal>? goals,
+    Set<String>? notified,
+    this.customColors,
+    this.lockEnabled = false,
+    this.notifyPayments = false,
+    this.notifyLimits = false,
+    this.notifyEvening = false,
     this.theme = 'zumrut',
     this.onboarded = false,
     this.demo = false,
-  })  : transactions = transactions ?? [],
+  })  : goals = goals ?? [],
+        notified = notified ?? {},
+        transactions = transactions ?? [],
         limits = limits ?? {},
         feedback = feedback ?? {},
         dismissed = dismissed ?? {};
@@ -147,6 +244,15 @@ class AppData {
 
   /// Insight key → the day it may appear again.
   Map<String, String> dismissed;
+  List<SavingsGoal> goals;
+
+  /// Limit alerts already sent, so each fires once a month.
+  Set<String> notified;
+  CustomColors? customColors;
+  bool lockEnabled;
+  bool notifyPayments;
+  bool notifyLimits;
+  bool notifyEvening;
   String theme;
   bool onboarded;
   bool demo;
@@ -159,6 +265,13 @@ class AppData {
           for (final e in feedback.entries) e.key: e.value.toJson(),
         },
         'dismissed': dismissed,
+        'goals': goals.map((g) => g.toJson()).toList(),
+        'notified': notified.toList(),
+        'customColors': customColors?.toJson(),
+        'lockEnabled': lockEnabled,
+        'notifyPayments': notifyPayments,
+        'notifyLimits': notifyLimits,
+        'notifyEvening': notifyEvening,
         'theme': theme,
         'onboarded': onboarded,
         'demo': demo,
@@ -189,10 +302,37 @@ class AppData {
       limits: _readLimits(json['limits']),
       feedback: _readFeedback(json['feedback']),
       dismissed: _readDismissed(json['dismissed']),
+      goals: _readGoals(json['goals']),
+      notified: _readNotified(json['notified']),
+      customColors: json['customColors'] == null
+          ? null
+          : CustomColors.fromJson(json['customColors']),
+      lockEnabled: json['lockEnabled'] == true,
+      notifyPayments: json['notifyPayments'] == true,
+      notifyLimits: json['notifyLimits'] == true,
+      notifyEvening: json['notifyEvening'] == true,
       theme: json['theme'] is String ? json['theme'] as String : 'zumrut',
       onboarded: json['onboarded'] == true,
       demo: json['demo'] == true,
     );
+  }
+
+  static List<SavingsGoal> _readGoals(Object? raw) {
+    if (raw == null) return [];
+    if (raw is! List) throw const FormatException('Hedefler geçersiz.');
+    final goals = raw.map(SavingsGoal.fromJson).toList();
+    if (goals.map((g) => g.id).toSet().length != goals.length) {
+      throw const FormatException('Aynı hedef iki kez kayıtlı.');
+    }
+    return goals;
+  }
+
+  static Set<String> _readNotified(Object? raw) {
+    if (raw == null) return {};
+    if (raw is! List || raw.any((key) => key is! String)) {
+      throw const FormatException('Bildirim geçmişi geçersiz.');
+    }
+    return raw.cast<String>().toSet();
   }
 
   static Map<Category, int> _readLimits(Object? raw) {
@@ -240,3 +380,6 @@ class AppData {
     return dismissed;
   }
 }
+
+/// Selected in [AppData.theme] when the user's own colors are in use.
+const customThemeId = 'ozel';

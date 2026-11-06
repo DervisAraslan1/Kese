@@ -21,6 +21,14 @@ class CategorizeAction extends InsightAction {
   final Category category;
 }
 
+/// Records a known monthly payment without retyping it.
+class PayAction extends InsightAction {
+  const PayAction(this.title, this.amount, this.category);
+  final String title;
+  final int amount;
+  final Category category;
+}
+
 class SetLimitAction extends InsightAction {
   const SetLimitAction(this.category, this.amount);
   final Category category;
@@ -212,6 +220,38 @@ Forecast? forecastMonth(List<Transaction> transactions, String today) {
   );
 }
 
+/// When a goal will be reached at the recent saving rate.
+class GoalEstimate {
+  const GoalEstimate({required this.month, required this.monthlySaving});
+
+  /// YYYY-MM.
+  final String month;
+  final int monthlySaving;
+}
+
+/// Averages income minus spending over the last three finished months that
+/// have data. Returns null when there is no history or nothing is left over.
+GoalEstimate? estimateGoal(
+  SavingsGoal goal,
+  List<Transaction> transactions,
+  String today,
+) {
+  if (goal.reached) return null;
+  final month = monthOf(today);
+  final nets = <int>[];
+  for (var i = 1; i <= 3; i++) {
+    final items = transactions.where((t) => monthOf(t.date) == addMonths(month, -i));
+    if (items.isEmpty) continue;
+    nets.add(items.fold(0, (sum, t) => sum + (t.isExpense ? -t.amount : t.amount)));
+  }
+  if (nets.isEmpty) return null;
+  final monthly = nets.reduce((a, b) => a + b) ~/ nets.length;
+  if (monthly <= 0) return null;
+  final months = (goal.remaining + monthly - 1) ~/ monthly;
+  if (months > 600) return null;
+  return GoalEstimate(month: addMonths(month, months), monthlySaving: monthly);
+}
+
 class _Context {
   _Context(this.data, this.today)
       : transactions = data.transactions,
@@ -382,6 +422,9 @@ List<Insight> _unusual(_Context ctx) {
 
 List<Insight> _upcoming(_Context ctx) {
   final horizon = addDays(ctx.today, 7);
+  // Paying next month's bill now would put two payments in this month and
+  // break the one-a-month pattern, so the button waits for the right month.
+  bool payable(Recurring r) => !r.paidThisMonth && monthOf(r.nextDate) == ctx.month;
   return [
     for (final r in ctx.recurring)
       if (r.nextDate.compareTo(horizon) <= 0)
@@ -391,6 +434,8 @@ List<Insight> _upcoming(_Context ctx) {
           title: '“${r.title}” ödemesi yaklaşıyor',
           reason:
               '${relativeDay(r.nextDate, ctx.today)} yaklaşık ${formatMoney(r.amount)} çıkacak. ${r.months} aydır düzenli ödüyorsun.',
+          actionLabel: payable(r) ? 'Ödedim' : null,
+          action: payable(r) ? PayAction(r.title, r.amount, r.category) : null,
           score: 50,
           snoozeDays: 8,
         ),

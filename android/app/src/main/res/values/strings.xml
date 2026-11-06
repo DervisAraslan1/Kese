@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="widget_description">Bu ay kalan paran ve hızlı harcama ekleme</string>
+    <string name="widget_add">Harcama ekle</string>
+</resources>

@@ -1,5 +1,6 @@
 package dev.kese.kese
 
-import io.flutter.embedding.android.FlutterActivity
+import io.flutter.embedding.android.FlutterFragmentActivity
 
-class MainActivity : FlutterActivity()
+// The fingerprint prompt needs a FragmentActivity.
+class MainActivity : FlutterFragmentActivity()

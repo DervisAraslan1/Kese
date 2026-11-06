@@ -94,6 +94,88 @@ const themes = [
 KeseTheme themeById(String id) =>
     themes.firstWhere((t) => t.id == id, orElse: () => themes.first);
 
+/// WCAG contrast ratio, from 1 (identical) to 21 (black on white).
+double contrastRatio(Color a, Color b) {
+  final first = a.computeLuminance();
+  final second = b.computeLuminance();
+  final lighter = first > second ? first : second;
+  final darker = first > second ? second : first;
+  return (lighter + 0.05) / (darker + 0.05);
+}
+
+const _minTextContrast = 4.5;
+const _minAccentContrast = 3.0;
+
+/// Black or white, whichever reads better. One of them always clears 4.5:1.
+Color _bestText(Color background) =>
+    contrastRatio(Colors.white, background) > contrastRatio(Colors.black, background)
+        ? Colors.white
+        : Colors.black;
+
+/// [preferred] moved toward [ink] only as far as needed to be readable.
+Color _readable(Color preferred, Color ink, Color background) {
+  for (var mix = 0.0; mix < 1; mix += 0.1) {
+    final color = Color.lerp(preferred, ink, mix)!;
+    if (contrastRatio(color, background) >= _minTextContrast) return color;
+  }
+  return ink;
+}
+
+/// [background] shifted toward [target], backing off while [ink] stays readable.
+Color _shade(Color background, Color target, double mix, Color ink) {
+  for (var amount = mix; amount > 0.005; amount /= 2) {
+    final color = Color.lerp(background, target, amount)!;
+    if (contrastRatio(ink, color) >= _minTextContrast) return color;
+  }
+  return background;
+}
+
+/// Builds a full theme from the two colors a user picks. The picker allows
+/// anything, so every text color is checked against what it sits on.
+KeseTheme deriveTheme(CustomColors custom) {
+  final background = Color(custom.background);
+  final accent = Color(custom.accent);
+  final ink = _bestText(background);
+  final dark = ink == Colors.white;
+  return KeseTheme(
+    id: customThemeId,
+    name: 'Özel',
+    brightness: dark ? Brightness.dark : Brightness.light,
+    background: background,
+    surface: dark
+        ? _shade(background, Colors.white, 0.07, ink)
+        : _shade(background, Colors.white, 0.6, ink),
+    surfaceHigh: dark
+        ? _shade(background, Colors.white, 0.14, ink)
+        : _shade(background, Colors.black, 0.07, ink),
+    accent: accent,
+    onAccent: _bestText(accent),
+    ink: ink,
+    inkSoft: _readable(Color.lerp(background, ink, 0.7)!, ink, background),
+    good: _readable(
+      dark ? const Color(0xFF34D399) : const Color(0xFF047857),
+      ink,
+      background,
+    ),
+    danger: _readable(
+      dark ? const Color(0xFFF87171) : const Color(0xFFB91C1C),
+      ink,
+      background,
+    ),
+  );
+}
+
+/// False when the accent would disappear into the background.
+bool accentIsLegible(CustomColors custom) =>
+    contrastRatio(Color(custom.accent), Color(custom.background)) >= _minAccentContrast;
+
+KeseTheme resolveTheme(AppData data) {
+  final custom = data.customColors;
+  return data.theme == customThemeId && custom != null
+      ? deriveTheme(custom)
+      : themeById(data.theme);
+}
+
 ThemeData buildTheme(KeseTheme t) {
   final scheme = ColorScheme(
     brightness: t.brightness,

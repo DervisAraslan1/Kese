@@ -27,9 +27,35 @@ netflix 229,99
 | Artış | Ayın ilk günlerindeki harcama ile önceki 3 ayın aynı dönemi |
 | Limit | Kategori limitinin %80'i ve %100'ü |
 | Olağandışı | Kategori medyanının 3 katından büyük harcama |
-| Yaklaşan | 7 gün içinde beklenen düzenli ödemeler |
+| Yaklaşan | 7 gün içinde beklenen düzenli ödemeler; **Ödedim** ile tek dokunuşta kaydedilir |
 
 Kabul ettiğin öneri türleri öne çıkar, kapattıkların geriye düşer.
+
+## Birikim hedefleri
+
+Bu ay ekranından hedef koyup para ekleyebilirsin. Tahmini ulaşma tarihi, biten son 3 ayın gelir ve gider farkından hesaplanır. Hedefe koyduğun para işlem sayılmaz, "Bu ay kalan" tutarını değiştirmez.
+
+## Bildirimler
+
+**Ayarlar → Bildirimler** altından ayrı ayrı açılır, hepsi telefonda çalışır. Metinlerde tutar yer almaz, çünkü kilit ekranında görünebilirler.
+
+- **Yaklaşan ödemeler:** Ödemeden bir gün önce sabah.
+- **Limit uyarıları:** Limitin %80 ve %100'ünde, ayda birer kez.
+- **Akşam hatırlatması:** O gün işlem girmediysen akşam 9 gibi. Plan 7 gün ileriye yapılır, uygulamayı açtıkça yenilenir.
+
+Android pil tasarrufu için hatırlatmaları bir saate kadar geciktirebilir.
+
+## Ana ekran widget'ı
+
+Telefonun widget listesinden **Kese**'yi ekle. Bu ayki kalan parayı gösterir, + düğmesi hızlı eklemeyi açar. Renkleri seçili temayı izler. Tutar yalnızca uygulamayı kullandıkça güncellenir.
+
+## Uygulama kilidi
+
+**Ayarlar → Güvenlik** altından açılır. Parmak izi, yüz veya ekran kilidi ister; 30 saniyeden uzun arka planda kalınca tekrar kilitlenir. Kilit açıkken widget tutarı gizler. Telefonun ekran kilidini kaldırırsan verilerine erişimin kesilmesin diye kilit kendiliğinden devre dışı kalır. Kilit ayarı yedekle taşınmaz.
+
+## Özel tema
+
+**Ayarlar → Tema → Özel** ile vurgu ve arka plan rengini seçersin, gerisi bunlardan türetilir. Yazı renkleri her renkte okunaklı kalacak şekilde hesaplanır; vurgu arka planda kayboluyorsa uyarı çıkar.
 
 ## Geliştirme
 

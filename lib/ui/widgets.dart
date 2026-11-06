@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../core/date.dart';
 import '../core/models.dart';
 import '../core/money.dart';
+import '../core/phone.dart';
 import '../core/store.dart';
 import 'editor.dart';
 import 'theme.dart';
@@ -13,6 +14,18 @@ class StoreScope extends InheritedNotifier<Store> {
 
   static Store of(BuildContext context) =>
       context.dependOnInheritedWidgetOfExactType<StoreScope>()!.notifier!;
+}
+
+class PhoneScope extends InheritedWidget {
+  const PhoneScope({super.key, required this.phone, required super.child});
+
+  final Phone phone;
+
+  static Phone of(BuildContext context) =>
+      context.getInheritedWidgetOfExactType<PhoneScope>()!.phone;
+
+  @override
+  bool updateShouldNotify(PhoneScope oldWidget) => phone != oldWidget.phone;
 }
 
 const tabular = [FontFeature.tabularFigures()];
@@ -29,6 +42,10 @@ void showUndo(BuildContext context, Undo? undo) {
     ..hideCurrentSnackBar()
     ..showSnackBar(SnackBar(
       content: Text(undo.message),
+      // A snack bar with an action otherwise stays up until something replaces
+      // it, covering the rows beneath.
+      persist: false,
+      duration: const Duration(seconds: 5),
       action: SnackBarAction(label: 'Geri al', onPressed: undo.revert),
     ));
 }

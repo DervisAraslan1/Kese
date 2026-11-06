@@ -184,6 +184,8 @@ void main() {
     await tester.pumpAndSettle();
 
     await tester.scrollUntilVisible(find.text('Kum'), 200, scrollable: find.byType(Scrollable).last);
+    await Scrollable.ensureVisible(tester.element(find.text('Kum')), alignment: 0.5);
+    await tester.pumpAndSettle();
     await tester.tap(find.text('Kum'));
     await tester.pumpAndSettle();
     expect(store.data.theme, 'kum');

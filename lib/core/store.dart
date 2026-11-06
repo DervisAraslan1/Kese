@@ -7,6 +7,7 @@ import 'package:flutter/foundation.dart'
 import 'date.dart';
 import 'insights.dart';
 import 'models.dart';
+import 'money.dart';
 import 'parse.dart';
 import 'seed.dart';
 
@@ -44,6 +45,7 @@ class Store extends ChangeNotifier {
 
   AppData get data => _data;
   List<Transaction> get transactions => _data.transactions;
+  DateTime get now => _clock();
   String get today => toKey(_clock());
 
   Future<void> load() async {
@@ -53,6 +55,7 @@ class Store extends ChangeNotifier {
         _data = AppData.fromJson(jsonDecode(raw));
         final today = this.today;
         _data.dismissed.removeWhere((_, until) => until.compareTo(today) <= 0);
+        _data.notified.removeWhere((key) => !key.contains(monthOf(today)));
       } on FormatException {
         await _persistence.quarantine(raw);
         recovered = true;
@@ -156,6 +159,8 @@ class Store extends ChangeNotifier {
         _categorize(normTitle, category),
       SetLimitAction(:final category, :final amount) =>
         _applyLimit(category, amount),
+      PayAction(:final title, :final amount, :final category) =>
+        _recordPayment(title, amount, category),
       null => () {},
     };
     _countFeedback(insight.kind, accepted: 1);
@@ -165,6 +170,25 @@ class Store extends ChangeNotifier {
       _countFeedback(insight.kind, accepted: -1);
       _changed();
     });
+  }
+
+  VoidCallback _recordPayment(String title, int amount, Category category) {
+    final tx = Transaction(
+      id: _newId(),
+      type: TxType.expense,
+      amount: amount,
+      title: title,
+      category: category,
+      date: today,
+      createdAt: _clock().toIso8601String(),
+    );
+    _data.transactions = [..._data.transactions, tx];
+    return () {
+      _data.transactions = [
+        for (final t in _data.transactions)
+          if (t.id != tx.id) t,
+      ];
+    };
   }
 
   VoidCallback _categorize(String normTitle, Category category) {
@@ -214,19 +238,121 @@ class Store extends ChangeNotifier {
     _changed();
   }
 
+  void setCustomColors(CustomColors colors) {
+    _data.customColors = colors;
+    _data.theme = customThemeId;
+    _changed();
+  }
+
+  void setLock(bool enabled) {
+    _data.lockEnabled = enabled;
+    _changed();
+  }
+
+  void setNotifications({bool? payments, bool? limits, bool? evening}) {
+    _data.notifyPayments = payments ?? _data.notifyPayments;
+    _data.notifyLimits = limits ?? _data.notifyLimits;
+    _data.notifyEvening = evening ?? _data.notifyEvening;
+    _changed();
+  }
+
+  void markNotified(Iterable<String> keys) {
+    _data.notified = {..._data.notified, ...keys};
+    _changed();
+  }
+
+  SavingsGoal addGoal(String title, int target) {
+    final goal = SavingsGoal(
+      id: _newId(),
+      title: title,
+      target: target,
+      saved: 0,
+      createdAt: _clock().toIso8601String(),
+    );
+    _data.goals = [..._data.goals, goal];
+    _changed();
+    return goal;
+  }
+
+  void _putGoal(SavingsGoal goal) {
+    _data.goals = [
+      for (final g in _data.goals) g.id == goal.id ? goal : g,
+    ];
+    _changed();
+  }
+
+  void updateGoal(String id, {required String title, required int target}) {
+    final goal = _goal(id);
+    if (goal != null) _putGoal(goal.copyWith(title: title, target: target));
+  }
+
+  SavingsGoal? _goal(String id) {
+    for (final g in _data.goals) {
+      if (g.id == id) return g;
+    }
+    return null;
+  }
+
+  /// A negative [amount] takes money back out; the total never drops below 0.
+  Undo? addToGoal(String id, int amount) {
+    final goal = _goal(id);
+    if (goal == null) return null;
+    final saved = (goal.saved + amount).clamp(0, maxAmount);
+    final added = saved - goal.saved;
+    _putGoal(goal.copyWith(saved: saved));
+    return Undo('“${goal.title}” güncellendi', () {
+      final current = _goal(id);
+      if (current != null) {
+        _putGoal(current.copyWith(saved: (current.saved - added).clamp(0, maxAmount)));
+      }
+    });
+  }
+
+  Undo? deleteGoal(String id) {
+    final goal = _goal(id);
+    if (goal == null) return null;
+    _data.goals = [
+      for (final g in _data.goals)
+        if (g.id != id) g,
+    ];
+    _changed();
+    return Undo('“${goal.title}” silindi', () {
+      if (_goal(id) != null) return;
+      _data.goals = [..._data.goals, goal];
+      _changed();
+    });
+  }
+
+  /// A fresh start keeps the choices that belong to the phone, not the data.
+  AppData _freshData({List<Transaction>? transactions, bool demo = false}) => AppData(
+        transactions: transactions,
+        customColors: _data.customColors,
+        lockEnabled: _data.lockEnabled,
+        notifyPayments: _data.notifyPayments,
+        notifyLimits: _data.notifyLimits,
+        notifyEvening: _data.notifyEvening,
+        theme: _data.theme,
+        onboarded: true,
+        demo: demo,
+      );
+
   void startWithDemo() {
     final demo = buildDemoTransactions(today);
-    _data = AppData(
-      transactions: demo,
-      theme: _data.theme,
-      onboarded: true,
-      demo: true,
-    );
+    _data = _freshData(transactions: demo, demo: true)
+      ..goals = [
+        SavingsGoal(
+          id: 'demo-hedef',
+          title: 'Yaz tatili',
+          target: 3000000,
+          saved: 850000,
+          createdAt: _clock().toIso8601String(),
+        ),
+      ];
     _changed();
   }
 
   void startEmpty() {
-    _data = AppData(theme: _data.theme, onboarded: true);
+    _data = _freshData();
     _changed();
   }
 
@@ -243,14 +369,15 @@ class Store extends ChangeNotifier {
     }
     final next = AppData.fromJson(decoded);
     final before = _data;
-    _data = AppData(
-      transactions: next.transactions,
-      limits: next.limits,
-      feedback: next.feedback,
-      dismissed: next.dismissed,
-      theme: _data.theme,
-      onboarded: true,
-    );
+    // The lock is deliberately not restored: a backup must never be able to
+    // lock someone out of a phone or switch off its protection.
+    _data = _freshData(transactions: next.transactions)
+      ..limits = next.limits
+      ..feedback = next.feedback
+      ..dismissed = next.dismissed
+      ..goals = next.goals
+      // Alerts this phone already showed stay shown.
+      ..notified = _data.notified;
     _changed();
     return Undo('${next.transactions.length} işlem yüklendi', () {
       _data = before;

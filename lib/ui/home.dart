@@ -5,6 +5,7 @@ import '../core/insights.dart';
 import '../core/models.dart';
 import '../core/money.dart';
 import '../core/store.dart';
+import 'goals.dart';
 import 'theme.dart';
 import 'widgets.dart';
 
@@ -68,6 +69,7 @@ class HomePage extends StatelessWidget {
             ),
           ),
         ],
+        const GoalsSection(),
         const SectionTitle('Son işlemler'),
         Card(
           clipBehavior: Clip.antiAlias,
