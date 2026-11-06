@@ -39,6 +39,9 @@ class _EditorState extends State<_Editor> {
   late TxType _type;
   late Category _category;
   String? _date;
+  int _installments = 1;
+
+  static const _installmentChoices = [1, 2, 3, 4, 5, 6, 9, 12, 18, 24, 36];
 
   Transaction? get _existing => widget.transaction;
 
@@ -63,6 +66,7 @@ class _EditorState extends State<_Editor> {
   void _setType(TxType type) => setState(() {
         _type = type;
         _category = type == TxType.income ? Category.gelir : Category.diger;
+        if (type == TxType.income) _installments = 1;
       });
 
   Future<void> _pickDate(String today) async {
@@ -84,12 +88,17 @@ class _EditorState extends State<_Editor> {
       title: _title.text.trim(),
       category: _category,
       date: _date ?? today,
+      installments: _installments,
     );
     final existing = _existing;
     final messenger = widget.messengerContext;
     Navigator.pop(context);
     if (existing == null) {
-      store.add(entry);
+      if (_installments > 1) {
+        showUndo(messenger, store.addInstallments(entry));
+      } else {
+        store.add(entry);
+      }
       return;
     }
     showUndo(
@@ -115,7 +124,8 @@ class _EditorState extends State<_Editor> {
   String? _validateAmount(String? value) {
     final amount = parseAmount(value ?? '');
     if (amount == null) return 'Geçerli bir tutar yaz. Örnek: 1.250,75';
-    return amount == 0 ? 'Tutar sıfır olamaz.' : null;
+    if (amount == 0) return 'Tutar sıfır olamaz.';
+    return amount < _installments ? 'Tutar bu kadar taksite bölünemez.' : null;
   }
 
   @override
@@ -170,6 +180,33 @@ class _EditorState extends State<_Editor> {
                 trailing: Text(relativeDay(_date ?? today, today)),
                 onTap: () => _pickDate(today),
               ),
+              if (_existing == null && _type == TxType.expense)
+                ListTile(
+                  contentPadding: EdgeInsets.zero,
+                  leading: const Icon(Icons.credit_card_outlined),
+                  title: const Text('Taksit'),
+                  trailing: DropdownButton<int>(
+                    value: _installments,
+                    underline: const SizedBox.shrink(),
+                    items: [
+                      for (final count in _installmentChoices)
+                        DropdownMenuItem(
+                          value: count,
+                          child: Text(count == 1 ? 'Peşin' : '$count taksit'),
+                        ),
+                    ],
+                    onChanged: (value) => setState(() => _installments = value ?? 1),
+                  ),
+                ),
+              if (_existing?.isInstallment ?? false)
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 8),
+                  child: Text(
+                    'Bu, ${_existing!.planCount} taksitin ${_existing!.planIndex}. taksiti. '
+                    'Değişiklik yalnızca bunu etkiler.',
+                    style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant),
+                  ),
+                ),
               const SizedBox(height: 4),
               Wrap(
                 spacing: 8,

@@ -91,6 +91,145 @@ void main() {
     expect(store.transactions.single.amount, 125075);
   });
 
+  testWidgets('a one-line installment shows up as a plan and can be undone', (tester) async {
+    final store = makeStore()..startEmpty();
+    await pumpApp(tester, store);
+
+    await quickAdd(tester, 'telefon 30.000 6 taksit');
+    expect(store.transactions.length, 6);
+    expect(find.text('Taksitler'), findsOneWidget);
+    expect(find.text('Aralık 2026 taksitleri: 5.000 ₺'), findsOneWidget);
+    expect(find.text('25.000 ₺ kaldı'), findsOneWidget);
+
+    await tester.tap(find.text('Geri al'));
+    await tester.pumpAndSettle();
+    expect(store.transactions, isEmpty);
+    expect(find.text('Taksitler'), findsNothing);
+  });
+
+  testWidgets('the form splits a purchase into installments', (tester) async {
+    final store = makeStore()..startEmpty();
+    await pumpApp(tester, store);
+    await tester.tap(find.byTooltip('Hızlı ekle'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Form ile ekle'));
+    await tester.pumpAndSettle();
+
+    await tester.enterText(find.widgetWithText(TextFormField, 'Başlık'), 'Buzdolabı');
+    await tester.enterText(find.widgetWithText(TextFormField, 'Tutar'), '12.000');
+    await tester.tap(find.text('Peşin'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('3 taksit').last);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Kaydet'));
+    await tester.pumpAndSettle();
+    expect(store.transactions.map((t) => t.amount), [400000, 400000, 400000]);
+    expect(store.transactions.last.planIndex, 3);
+  });
+
+  testWidgets('income cannot be split in the form', (tester) async {
+    final store = makeStore()..startEmpty();
+    await pumpApp(tester, store);
+    await tester.tap(find.byTooltip('Hızlı ekle'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Form ile ekle'));
+    await tester.pumpAndSettle();
+    expect(find.text('Taksit'), findsOneWidget);
+    await tester.tap(find.descendant(of: find.byType(SegmentedButton<TxType>), matching: find.text('Gelir')));
+    await tester.pumpAndSettle();
+    expect(find.text('Taksit'), findsNothing);
+  });
+
+  testWidgets('a plan row deletes what is left and undo brings it back', (tester) async {
+    final store = makeStore()..startEmpty();
+    await pumpApp(tester, store);
+    await quickAdd(tester, 'telefon 30.000 6 taksit');
+    await tester.pump(const Duration(seconds: 6));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('25.000 ₺ kaldı'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Kalan taksitleri sil'));
+    await tester.pumpAndSettle();
+    expect(store.transactions.length, 1);
+
+    await tester.tap(find.text('Geri al'));
+    await tester.pumpAndSettle();
+    expect(store.transactions.length, 6);
+  });
+
+  testWidgets('coming installments stay out of recent, and the month picker reaches them',
+      (tester) async {
+    final store = makeStore()..startEmpty();
+    await pumpApp(tester, store);
+    await quickAdd(tester, 'telefon 30.000 3 taksit');
+    await tester.pump(const Duration(seconds: 6));
+    await tester.pumpAndSettle();
+    await tester.scrollUntilVisible(find.textContaining('Taksit 1/3'), 200);
+    expect(find.textContaining('Taksit 1/3'), findsOneWidget);
+    expect(find.textContaining('Taksit 2/3'), findsNothing);
+
+    await tester.tap(find.widgetWithText(NavigationDestination, 'İşlemler'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byTooltip('Sonraki ay'));
+    await tester.pumpAndSettle();
+    expect(find.textContaining('Taksit 2/3'), findsOneWidget);
+    await tester.tap(find.byTooltip('Sonraki ay'));
+    await tester.pumpAndSettle();
+    expect(find.textContaining('Taksit 3/3'), findsOneWidget);
+    final next = tester.widget<IconButton>(find.widgetWithIcon(IconButton, Icons.chevron_right));
+    expect(next.onPressed, isNull, reason: 'nothing lies beyond the last installment');
+  });
+
+  testWidgets('a debt is added on one line, paid and closed', (tester) async {
+    final store = makeStore()..startEmpty();
+    await pumpApp(tester, store);
+    await quickAdd(tester, 'ali 1.000 #alacak');
+    expect(store.data.debts.single.kind, DebtKind.owed);
+    expect(store.transactions, isEmpty);
+    await tester.pump(const Duration(seconds: 6));
+    await tester.pumpAndSettle();
+
+    await tester.scrollUntilVisible(find.text('ali'), 200);
+    await tester.tap(find.text('ali'));
+    await tester.pumpAndSettle();
+    await tester.enterText(find.widgetWithText(TextField, 'Tutar'), '400');
+    await tester.tap(find.text('Ödeme ekle'));
+    await tester.pumpAndSettle();
+    expect(store.data.debts.single.remaining, 60000);
+    await tester.pump(const Duration(seconds: 6));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('ali'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Tamamını kapat'));
+    await tester.pumpAndSettle();
+    expect(store.data.debts.single.settled, isTrue);
+    expect(find.text('Kapandı'), findsOneWidget);
+    expect(store.transactions, isEmpty, reason: 'debts stay out of the budget');
+  });
+
+  testWidgets('the debt dialog validates, then saves with a kind', (tester) async {
+    final store = makeStore()..startEmpty();
+    await pumpApp(tester, store);
+    await tester.scrollUntilVisible(find.byTooltip('Yeni borç veya alacak'), 200);
+    await tester.tap(find.byTooltip('Yeni borç veya alacak'));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Kaydet'));
+    await tester.pumpAndSettle();
+    expect(find.text('Kimle olduğunu yaz.'), findsOneWidget);
+    expect(store.data.debts, isEmpty);
+
+    await tester.tap(find.text('Borcum'));
+    await tester.enterText(find.widgetWithText(TextField, 'Kişi veya açıklama'), 'Veli');
+    await tester.enterText(find.widgetWithText(TextField, 'Tutar'), '2.500');
+    await tester.tap(find.text('Kaydet'));
+    await tester.pumpAndSettle();
+    expect(store.data.debts.single.kind, DebtKind.owe);
+    expect(store.data.debts.single.amount, 250000);
+  });
+
   testWidgets('every tab renders the demo data without overflow', (tester) async {
     final store = makeStore()..startWithDemo();
     await pumpApp(tester, store);

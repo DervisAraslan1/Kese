@@ -9,6 +9,7 @@ import 'insights.dart';
 import 'models.dart';
 import 'money.dart';
 import 'parse.dart';
+import 'plans.dart';
 import 'seed.dart';
 
 abstract class Persistence {
@@ -98,6 +99,59 @@ class Store extends ChangeNotifier {
     _data.transactions = [..._data.transactions, tx];
     _changed();
     return tx;
+  }
+
+  /// Records a purchase as one transaction per month from [ParsedEntry.date].
+  Undo addInstallments(ParsedEntry entry) {
+    final planId = _newId();
+    final created = _clock().toIso8601String();
+    final items = [
+      for (final part in splitInstallments(entry))
+        Transaction(
+          id: _newId(),
+          type: TxType.expense,
+          amount: part.amount,
+          title: entry.title,
+          category: entry.category,
+          date: part.date,
+          createdAt: created,
+          planId: planId,
+          planIndex: part.index,
+          planCount: entry.installments,
+        ),
+    ];
+    _data.transactions = [..._data.transactions, ...items];
+    _changed();
+    return Undo('“${entry.title}” ${entry.installments} taksit eklendi', () {
+      _data.transactions = [
+        for (final t in _data.transactions)
+          if (t.planId != planId) t,
+      ];
+      _changed();
+    });
+  }
+
+  /// With [onlyFuture], what already fell due stays on record: a returned
+  /// purchase has still been paid for up to now.
+  Undo? deletePlan(String planId, {bool onlyFuture = false}) {
+    bool removes(Transaction t) =>
+        t.planId == planId && (!onlyFuture || t.date.compareTo(today) > 0);
+    final removed = _data.transactions.where(removes).toList();
+    if (removed.isEmpty) return null;
+    _data.transactions = [
+      for (final t in _data.transactions)
+        if (!removes(t)) t,
+    ];
+    _changed();
+    return Undo('“${removed.first.title}” taksitleri silindi', () {
+      final ids = _data.transactions.map((t) => t.id).toSet();
+      _data.transactions = [
+        ..._data.transactions,
+        for (final t in removed)
+          if (!ids.contains(t.id)) t,
+      ];
+      _changed();
+    });
   }
 
   Undo? update(Transaction next) {
@@ -323,6 +377,86 @@ class Store extends ChangeNotifier {
     });
   }
 
+  Debt addDebt(DebtKind kind, String title, int amount, {String? due}) {
+    final debt = Debt(
+      id: _newId(),
+      kind: kind,
+      title: title,
+      amount: amount,
+      paid: 0,
+      due: due,
+      createdAt: _clock().toIso8601String(),
+    );
+    _data.debts = [..._data.debts, debt];
+    _changed();
+    return debt;
+  }
+
+  Debt? _debt(String id) {
+    for (final d in _data.debts) {
+      if (d.id == id) return d;
+    }
+    return null;
+  }
+
+  void _putDebt(Debt debt) {
+    _data.debts = [
+      for (final d in _data.debts) d.id == debt.id ? debt : d,
+    ];
+    _changed();
+  }
+
+  /// Lowering the amount below what was paid closes the debt.
+  void updateDebt(
+    String id, {
+    required DebtKind kind,
+    required String title,
+    required int amount,
+    required String? due,
+  }) {
+    final debt = _debt(id);
+    if (debt == null) return;
+    _putDebt(Debt(
+      id: id,
+      kind: kind,
+      title: title,
+      amount: amount,
+      paid: debt.paid > amount ? amount : debt.paid,
+      due: due,
+      createdAt: debt.createdAt,
+    ));
+  }
+
+  /// A negative [amount] corrects a payment; the total stays within the debt.
+  Undo? payDebt(String id, int amount) {
+    final debt = _debt(id);
+    if (debt == null) return null;
+    final paid = (debt.paid + amount).clamp(0, debt.amount);
+    final change = paid - debt.paid;
+    _putDebt(debt.copyWith(paid: paid));
+    return Undo('“${debt.title}” güncellendi', () {
+      final current = _debt(id);
+      if (current != null) {
+        _putDebt(current.copyWith(paid: (current.paid - change).clamp(0, current.amount)));
+      }
+    });
+  }
+
+  Undo? deleteDebt(String id) {
+    final debt = _debt(id);
+    if (debt == null) return null;
+    _data.debts = [
+      for (final d in _data.debts)
+        if (d.id != id) d,
+    ];
+    _changed();
+    return Undo('“${debt.title}” silindi', () {
+      if (_debt(id) != null) return;
+      _data.debts = [..._data.debts, debt];
+      _changed();
+    });
+  }
+
   /// A fresh start keeps the choices that belong to the phone, not the data.
   AppData _freshData({List<Transaction>? transactions, bool demo = false}) => AppData(
         transactions: transactions,
@@ -347,8 +481,25 @@ class Store extends ChangeNotifier {
           saved: 850000,
           createdAt: _clock().toIso8601String(),
         ),
+      ]
+      ..debts = [
+        Debt(
+          id: 'demo-borc',
+          kind: DebtKind.owed,
+          title: 'Ali',
+          amount: 150000,
+          paid: 50000,
+          createdAt: _clock().toIso8601String(),
+        ),
       ];
-    _changed();
+    addInstallments(ParsedEntry(
+      type: TxType.expense,
+      amount: 3000000,
+      title: 'Telefon',
+      category: Category.diger,
+      date: addDays(today, -35),
+      installments: 6,
+    ));
   }
 
   void startEmpty() {
@@ -376,6 +527,7 @@ class Store extends ChangeNotifier {
       ..feedback = next.feedback
       ..dismissed = next.dismissed
       ..goals = next.goals
+      ..debts = next.debts
       // Alerts this phone already showed stay shown.
       ..notified = _data.notified;
     _changed();

@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../core/date.dart';
 import '../core/money.dart';
 import '../core/parse.dart';
+import '../core/plans.dart';
 import '../core/store.dart';
 import 'editor.dart';
 import 'widgets.dart';
@@ -18,7 +19,13 @@ Future<void> showQuickAdd(BuildContext context) => showModalBottomSheet<void>(
       ),
     );
 
-const _examples = ['market 340 tl', 'dün kira 12.500 #ev', 'maaş +45.000', 'netflix 229,99'];
+const _examples = [
+  'market 340 tl',
+  'dün kira 12.500 #ev',
+  'maaş +45.000',
+  'telefon 30.000 6 taksit',
+  'ali 500 #alacak',
+];
 
 class _QuickAdd extends StatefulWidget {
   const _QuickAdd({required this.pageContext});
@@ -48,12 +55,26 @@ class _QuickAddState extends State<_QuickAdd> {
       return;
     }
     final page = widget.pageContext;
-    final saved = store.add(entry);
+    final Undo undo;
+    if (entry.debt != null) {
+      final debt = store.addDebt(entry.debt!, entry.title, entry.amount);
+      undo = Undo('“${debt.title}” eklendi', () => store.deleteDebt(debt.id));
+    } else if (entry.installments > 1) {
+      undo = store.addInstallments(entry);
+    } else {
+      final saved = store.add(entry);
+      undo = Undo('“${saved.title}” eklendi', () => store.delete(saved.id));
+    }
     Navigator.pop(context);
-    showUndo(
-      page,
-      Undo('“${saved.title}” eklendi', () => store.delete(saved.id)),
-    );
+    showUndo(page, undo);
+  }
+
+  String _describe(ParsedEntry entry, String today) {
+    if (entry.debt != null) return entry.debt!.label;
+    final base = '${entry.category.label} · ${relativeDay(entry.date, today)}';
+    if (entry.installments == 1) return base;
+    final first = splitInstallments(entry).first.amount;
+    return '$base · ${entry.installments} × ${formatMoney(first)}';
   }
 
   @override
@@ -93,9 +114,7 @@ class _QuickAddState extends State<_QuickAdd> {
               contentPadding: EdgeInsets.zero,
               leading: CategoryBadge(preview.category),
               title: Text(preview.title),
-              subtitle: Text(
-                '${preview.category.label} · ${relativeDay(preview.date, store.today)}',
-              ),
+              subtitle: Text(_describe(preview, store.today)),
               trailing: Text(
                 formatMoney(preview.amount),
                 style: const TextStyle(fontWeight: FontWeight.w700, fontFeatures: tabular),

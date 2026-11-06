@@ -5,6 +5,7 @@ import '../core/insights.dart';
 import '../core/models.dart';
 import '../core/money.dart';
 import '../core/store.dart';
+import 'debts.dart';
 import 'goals.dart';
 import 'theme.dart';
 import 'widgets.dart';
@@ -24,7 +25,10 @@ class HomePage extends StatelessWidget {
     final earned = sumOf(monthly.where((t) => !t.isExpense));
     final forecast = forecastMonth(store.transactions, today);
     final insights = buildInsights(store.data, today);
-    final recent = [...store.transactions]
+    // Installments ahead are commitments, not things that happened.
+    final recent = store.transactions
+        .where((t) => !t.isInstallment || t.date.compareTo(today) <= 0)
+        .toList()
       ..sort((a, b) {
         final byDate = b.date.compareTo(a.date);
         return byDate != 0 ? byDate : b.createdAt.compareTo(a.createdAt);
@@ -69,6 +73,7 @@ class HomePage extends StatelessWidget {
             ),
           ),
         ],
+        const PlansSection(),
         const GoalsSection(),
         const SectionTitle('Son işlemler'),
         Card(
@@ -81,6 +86,7 @@ class HomePage extends StatelessWidget {
                   ],
                 ),
         ),
+        const DebtsSection(),
       ],
     );
   }
@@ -183,6 +189,7 @@ const _insightLabels = {
   InsightKind.limit: ('Limit', Icons.speed_outlined),
   InsightKind.unusual: ('Olağandışı', Icons.priority_high),
   InsightKind.upcoming: ('Yaklaşan', Icons.event_outlined),
+  InsightKind.debt: ('Borç', Icons.handshake_outlined),
 };
 
 class _InsightCard extends StatelessWidget {

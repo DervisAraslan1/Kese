@@ -8,7 +8,7 @@ const _maxVisible = 4;
 /// One noisy month must not fill every slot with the same kind of card.
 const _maxPerKind = 2;
 
-enum InsightKind { subscription, forecast, increase, limit, unusual, upcoming }
+enum InsightKind { subscription, forecast, increase, limit, unusual, upcoming, debt }
 
 sealed class InsightAction {
   const InsightAction();
@@ -101,7 +101,7 @@ List<Recurring> detectRecurring(
   final month = monthOf(today);
   final byTitle = <String, List<Transaction>>{};
   for (final tx in transactions) {
-    if (tx.type != type || tx.date.compareTo(today) > 0) continue;
+    if (tx.type != type || tx.isInstallment || tx.date.compareTo(today) > 0) continue;
     byTitle.putIfAbsent(normalizeTitle(tx.title), () => []).add(tx);
   }
 
@@ -200,6 +200,7 @@ Forecast? forecastMonth(List<Transaction> transactions, String today) {
           t.isExpense &&
           t.date.compareTo(windowStart) >= 0 &&
           t.date.compareTo(today) < 0 &&
+          !t.isInstallment &&
           !fixed.contains(normalizeTitle(t.title)))
       .fold(0, (sum, t) => sum + t.amount);
   final remainingDays = daysInMonth(month) - dayOf(today);
@@ -209,7 +210,14 @@ Forecast? forecastMonth(List<Transaction> transactions, String today) {
       .where((r) => !r.paidThisMonth && monthOf(r.nextDate) == month)
       .fold(0, (sum, r) => sum + r.amount);
 
-  final projected = spent + pending(recurringOut) + expectedVariable;
+  // Past days are in `spent`; installments still to come this month are known
+  // exactly, so they are added rather than estimated.
+  final installmentsDue = transactions
+      .where((t) =>
+          t.isInstallment && t.date.compareTo(today) > 0 && monthOf(t.date) == month)
+      .fold(0, (sum, t) => sum + t.amount);
+
+  final projected = spent + pending(recurringOut) + expectedVariable + installmentsDue;
   final income = earned + pending(recurringIn);
   return Forecast(
     spent: spent,
@@ -264,13 +272,20 @@ class _Context {
   final String month;
   final List<Recurring> recurring;
 
-  int spentIn(Category category, String month, {int? throughDay}) => transactions
-      .where((t) =>
-          t.isExpense &&
-          t.category == category &&
-          monthOf(t.date) == month &&
-          (throughDay == null || dayOf(t.date) <= throughDay))
-      .fold(0, (sum, t) => sum + t.amount);
+  int spentIn(
+    Category category,
+    String month, {
+    int? throughDay,
+    bool installments = true,
+  }) =>
+      transactions
+          .where((t) =>
+              t.isExpense &&
+              t.category == category &&
+              monthOf(t.date) == month &&
+              (installments || !t.isInstallment) &&
+              (throughDay == null || dayOf(t.date) <= throughDay))
+          .fold(0, (sum, t) => sum + t.amount);
 }
 
 typedef _Rule = List<Insight> Function(_Context ctx);
@@ -320,9 +335,11 @@ List<Insight> _increase(_Context ctx) {
 
   final insights = <Insight>[];
   for (final category in Category.expenses) {
-    final current = ctx.spentIn(category, ctx.month, throughDay: day);
+    // A purchase already made says nothing about this month's habits.
+    final current = ctx.spentIn(category, ctx.month, throughDay: day, installments: false);
     final earlier = [
-      for (final m in previous) ctx.spentIn(category, m, throughDay: day),
+      for (final m in previous)
+        ctx.spentIn(category, m, throughDay: day, installments: false),
     ];
     if (earlier.any((amount) => amount == 0)) continue;
     final average = earlier.reduce((a, b) => a + b) ~/ earlier.length;
@@ -390,6 +407,7 @@ List<Insight> _unusual(_Context ctx) {
   final insights = <Insight>[];
   for (final tx in ctx.transactions) {
     if (!tx.isExpense ||
+        tx.isInstallment ||
         tx.date.compareTo(recent) < 0 ||
         tx.date.compareTo(ctx.today) > 0 ||
         fixed.contains(normalizeTitle(tx.title))) {
@@ -398,6 +416,7 @@ List<Insight> _unusual(_Context ctx) {
     final samples = ctx.transactions
         .where((t) =>
             t.isExpense &&
+            !t.isInstallment &&
             t.id != tx.id &&
             t.category == tx.category &&
             t.date.compareTo(since) >= 0 &&
@@ -442,7 +461,32 @@ List<Insight> _upcoming(_Context ctx) {
   ];
 }
 
+const _debtHorizon = 7;
+
+List<Insight> _debts(_Context ctx) {
+  final horizon = addDays(ctx.today, _debtHorizon);
+  return [
+    for (final debt in ctx.data.debts)
+      if (!debt.settled && debt.due != null && debt.due!.compareTo(horizon) <= 0)
+        _debtInsight(debt, debt.due!, ctx.today),
+  ];
+}
+
+Insight _debtInsight(Debt debt, String due, String today) {
+  final late = due.compareTo(today) < 0;
+  final name = debt.kind == DebtKind.owe ? 'borcu' : 'alacağı';
+  return Insight(
+    key: 'debt:${debt.id}:$due',
+    kind: InsightKind.debt,
+    title: '“${debt.title}” $name ${late ? 'gecikti' : 'yaklaşıyor'}',
+    reason: '${formatMoney(debt.remaining)} kaldı, günü ${relativeDay(due, today)}.',
+    score: late ? 75 : 60,
+    snoozeDays: 3,
+  );
+}
+
 const List<_Rule> _rules = [
+  _debts,
   _limits,
   _forecast,
   _increase,

@@ -16,6 +16,8 @@ class ParsedEntry {
     required this.title,
     required this.category,
     required this.date,
+    this.installments = 1,
+    this.debt,
   });
 
   final TxType type;
@@ -23,6 +25,12 @@ class ParsedEntry {
   final String title;
   final Category category;
   final String date;
+
+  /// More than 1 spreads [amount] over that many months.
+  final int installments;
+
+  /// Set when the line records a debt instead of a transaction.
+  final DebtKind? debt;
 }
 
 /// Exactly one of [entry] and [error] is set.
@@ -50,6 +58,12 @@ const _tags = {
   'diğer': Category.diger,
   'diger': Category.diger,
   'gelir': Category.gelir,
+};
+
+const _debtTags = {
+  'borç': DebtKind.owe,
+  'borc': DebtKind.owe,
+  'alacak': DebtKind.owed,
 };
 
 // Word stems, so suffixed forms such as "marketten" still match. Specific
@@ -173,13 +187,32 @@ ParseResult parseEntry(
   final text = _Text(input);
 
   Category? tagged;
+  DebtKind? debt;
   for (var i = 0; i < text.words.length; i++) {
     final word = text.lower(i);
-    if (word.startsWith('#') && _tags.containsKey(word.substring(1))) {
-      tagged = _tags[word.substring(1)];
-      text.cut(i, 1);
-      break;
+    if (!word.startsWith('#')) continue;
+    final tag = word.substring(1);
+    if (_tags.containsKey(tag)) {
+      tagged = _tags[tag];
+    } else if (_debtTags.containsKey(tag)) {
+      debt = _debtTags[tag];
+    } else {
+      continue;
     }
+    text.cut(i, 1);
+    break;
+  }
+
+  // Before the amount: the 6 in "telefon 30.000 6 taksit" is not a price.
+  final installments = _takeInstallments(text);
+  if (installments != null &&
+      (installments < minInstallments || installments > maxInstallments)) {
+    return const ParseResult.fail(
+      'Taksit sayısı $minInstallments ile $maxInstallments arasında olmalı.',
+    );
+  }
+  if (installments != null && debt != null) {
+    return const ParseResult.fail('Borç kaydı taksitlendirilemez.');
   }
 
   final amountMatch = _findAmount(text);
@@ -206,13 +239,26 @@ ParseResult parseEntry(
   final incomeWord = titleWords.any(
     (word) => _incomeStems.any(word.startsWith),
   );
-  final type = amountMatch.plus || tagged == Category.gelir || incomeWord
+  final type = debt == null &&
+          (amountMatch.plus || tagged == Category.gelir || incomeWord)
       ? TxType.income
       : TxType.expense;
+  if (installments != null) {
+    if (type == TxType.income) {
+      return const ParseResult.fail('Gelir taksitlendirilemez.');
+    }
+    if (amount < installments) {
+      return const ParseResult.fail('Tutar bu kadar taksite bölünemez.');
+    }
+  }
 
-  final category = type == TxType.income
+  var category = type == TxType.income
       ? Category.gelir
       : tagged ?? guessCategory(title, type, history);
+  // "telefon" is a bill on its own, but nobody pays a bill in installments.
+  if (installments != null && tagged == null && category == Category.fatura) {
+    category = Category.diger;
+  }
 
   return ParseResult.ok(ParsedEntry(
     type: type,
@@ -220,7 +266,32 @@ ParseResult parseEntry(
     title: title,
     category: category,
     date: date,
+    installments: installments ?? 1,
+    debt: debt,
   ));
+}
+
+final _joinedInstallment = RegExp(r'^(\d+)taksit');
+final _plainCount = RegExp(r'^\d+$');
+
+/// Reads "6 taksit" or "6taksit". A bare "taksit" stays in the title: "araba
+/// taksiti 8.000" is one payment of an existing loan.
+int? _takeInstallments(_Text text) {
+  for (var i = 0; i < text.words.length; i++) {
+    final joined = _joinedInstallment.firstMatch(text.lower(i));
+    if (joined != null) {
+      text.cut(i, 1);
+      return int.tryParse(joined.group(1)!) ?? 0;
+    }
+    if (i + 1 < text.words.length &&
+        _plainCount.hasMatch(text.lower(i)) &&
+        text.lower(i + 1).startsWith('taksit')) {
+      final count = int.tryParse(text.lower(i)) ?? 0;
+      text.cut(i, 2);
+      return count;
+    }
+  }
+  return null;
 }
 
 String _takeDate(_Text text, String today) {

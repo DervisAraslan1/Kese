@@ -24,6 +24,11 @@ const _eveningDays = 7;
 const _firstPaymentId = 1000;
 const _firstEveningId = 2000;
 const _firstLimitId = 3000;
+const _firstInstallmentId = 4000;
+const _firstDebtId = 5000;
+
+/// Android caps pending alarms, and a far-off plan does not need all of them.
+const _maxAhead = 8;
 
 /// Everything to schedule from now on, recomputed whenever data changes.
 List<PlannedNotification> planNotifications(AppData data, DateTime now) {
@@ -44,6 +49,37 @@ List<PlannedNotification> planNotifications(AppData data, DateTime now) {
           body: '“${payment.title}” ödemen yaklaşıyor.',
         ));
       }
+    }
+
+    DateTime dayBefore(String date) {
+      final day = fromKey(addDays(date, -1));
+      return DateTime(day.year, day.month, day.day, _paymentHour);
+    }
+
+    final installments = data.transactions
+        .where((t) => t.isInstallment && dayBefore(t.date).isAfter(now))
+        .toList()
+      ..sort((a, b) => a.date.compareTo(b.date));
+    for (final (i, tx) in installments.take(_maxAhead).indexed) {
+      plan.add(PlannedNotification(
+        id: _firstInstallmentId + i,
+        at: dayBefore(tx.date),
+        title: 'Yarın taksit var',
+        body: '“${tx.title}” taksitin yaklaşıyor.',
+      ));
+    }
+
+    final debts = data.debts
+        .where((d) => !d.settled && d.due != null && dayBefore(d.due!).isAfter(now))
+        .toList()
+      ..sort((a, b) => a.due!.compareTo(b.due!));
+    for (final (i, debt) in debts.take(_maxAhead).indexed) {
+      plan.add(PlannedNotification(
+        id: _firstDebtId + i,
+        at: dayBefore(debt.due!),
+        title: debt.kind == DebtKind.owe ? 'Yarın borç günü' : 'Yarın alacak günü',
+        body: '“${debt.title}” için günü yaklaşıyor.',
+      ));
     }
   }
 

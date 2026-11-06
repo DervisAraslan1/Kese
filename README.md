@@ -9,11 +9,15 @@ market 340 tl
 dün kira 12.500 #ev
 maaş +45.000
 netflix 229,99
+telefon 30.000 6 taksit
+ali 500 #alacak
 ```
 
 - **Tutar:** `12.500` on iki bin beş yüz, `12,5` on iki buçuk lira. `1,250` gibi belirsiz yazımlar kabul edilmez.
 - **Gün:** `bugün`, `dün`, `evvelsi gün`, hafta günleri. Hafta günü en son geçen günü gösterir.
 - **Gelir:** `+` ile başlayan tutar veya `maaş`, `prim`, `iade` gibi kelimeler.
+- **Taksit:** `6 taksit` veya `6taksit`, 2 ile 36 arası. Yazdığın tutar toplam fiyattır. `araba taksiti 8.000` gibi sayısız yazım tek ödeme olarak kalır.
+- **Borç:** `#borç` sana verilen, `#alacak` senin verdiğin para.
 - **Kategori:** `#market`, `#yemek`, `#ulaşım`, `#fatura`, `#ev`, `#eğlence`, `#sağlık`, `#abonelik`, `#diğer`. Etiket yoksa önce kendi geçmişine, sonra anahtar kelimelere bakılır.
 
 ## Öneriler
@@ -28,8 +32,21 @@ netflix 229,99
 | Limit | Kategori limitinin %80'i ve %100'ü |
 | Olağandışı | Kategori medyanının 3 katından büyük harcama |
 | Yaklaşan | 7 gün içinde beklenen düzenli ödemeler; **Ödedim** ile tek dokunuşta kaydedilir |
+| Borç | Günü 7 gün içinde olan veya geçen borç ve alacaklar |
 
 Kabul ettiğin öneri türleri öne çıkar, kapattıkların geriye düşer.
+
+## Taksitler
+
+Bir taksitli alışveriş, her ay için ayrı bir işlem olarak kaydedilir. İlk taksit alışveriş gününe, sonrakiler izleyen ayların aynı gününe düşer; kısa aylarda ayın son günü kullanılır. Kuruş artarsa ilk taksitlere eklenir, toplam hep tutar.
+
+Her taksit kendi ayının gideri sayılır, yani **Bu ay kalan**, limitler ve analiz onu gerçek haliyle gösterir. Ay sonu tahmini bu ayın kalan taksitlerini ekler. Abonelik, artış ve olağandışı harcama önerileri taksitleri saymaz, çünkü bunlar yeni bir alışkanlık değil, verilmiş bir karardır.
+
+**Bu ay** ekranında aktif planlar ve gelecek ayın toplamı görünür. Plana dokununca kalan taksitleri silebilirsin, örneğin ürünü iade ettiysen; geçmiş taksitler kayıtta kalır. Gelecek ayların taksitleri **İşlemler** ekranından görülür.
+
+## Borç ve alacak
+
+Bu ay ekranının altındadır. Borçlar bütçenin dışında durur: birinden aldığın para gelir, geri ödediğin para gider sayılmaz, **Bu ay kalan** tutarını değiştirmez. Ödeme günü isteğe bağlıdır; verirsen gün yaklaşınca öneri çıkar. Faizli kredi gibi bütçeden çıkan ödemeleri ayrıca gider olarak yaz.
 
 ## Birikim hedefleri
 
@@ -39,7 +56,7 @@ Bu ay ekranından hedef koyup para ekleyebilirsin. Tahmini ulaşma tarihi, biten
 
 **Ayarlar → Bildirimler** altından ayrı ayrı açılır, hepsi telefonda çalışır. Metinlerde tutar yer almaz, çünkü kilit ekranında görünebilirler.
 
-- **Yaklaşan ödemeler:** Ödemeden bir gün önce sabah.
+- **Yaklaşan ödemeler:** Düzenli ödeme, taksit ve günü olan borçlar için bir gün önce sabah. Taksit ve borçların en yakın sekizi planlanır, uygulamayı açtıkça yenilenir.
 - **Limit uyarıları:** Limitin %80 ve %100'ünde, ayda birer kez.
 - **Akşam hatırlatması:** O gün işlem girmediysen akşam 9 gibi. Plan 7 gün ileriye yapılır, uygulamayı açtıkça yenilenir.
 
@@ -66,6 +83,19 @@ flutter test                # testler
 flutter run                 # bağlı telefon veya emülatörde çalıştır
 flutter build apk --release # build/app/outputs/flutter-apk/app-release.apk
 ```
+
+## İmzalama
+
+Release derlemesi `android/key.properties` dosyasındaki anahtarla imzalanır. Dosya ve anahtar repoya girmez. Dosya yoksa APK imzasız çıkar ve telefona kurulmaz; bu bilinçlidir, çünkü başka bir anahtarla imzalanan sürüm eskisinin üstüne kurulamaz.
+
+```properties
+storeFile=C:/yol/kese-release.jks
+storePassword=...
+keyAlias=kese
+keyPassword=...
+```
+
+Anahtar kaybolursa uygulama güncellenemez, kullanıcıların silip yeniden kurması gerekir. Bu yüzden anahtarı ve şifresini bilgisayar dışında da yedekle. Yeni sürüm yayınlarken `pubspec.yaml` içindeki `version` değerinin `+` sonrasını artır.
 
 ## Yedekleme
 

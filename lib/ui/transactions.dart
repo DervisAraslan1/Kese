@@ -25,6 +25,10 @@ class _TransactionsPageState extends State<TransactionsPage> {
     final store = StoreScope.of(context);
     final current = monthOf(store.today);
     final month = _month ?? current;
+    // Installments reach into coming months, so the picker has to as well.
+    final last = store.transactions
+        .map((t) => monthOf(t.date))
+        .fold(current, (a, b) => b.compareTo(a) > 0 ? b : a);
     final searching = _query.trim().isNotEmpty;
 
     // A search covers every month: that is why people search.
@@ -64,7 +68,7 @@ class _TransactionsPageState extends State<TransactionsPage> {
         if (!searching)
           MonthPicker(
             month: month,
-            current: current,
+            current: last,
             onChanged: (value) => setState(() => _month = value),
           ),
         SizedBox(

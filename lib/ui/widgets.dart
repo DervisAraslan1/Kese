@@ -110,9 +110,10 @@ class TransactionTile extends StatelessWidget {
   Widget build(BuildContext context) {
     final store = StoreScope.of(context);
     final tx = transaction;
-    final subtitle = showDate
-        ? '${tx.category.label} · ${relativeDay(tx.date, store.today)}'
+    final label = tx.isInstallment
+        ? '${tx.category.label} · Taksit ${tx.planIndex}/${tx.planCount}'
         : tx.category.label;
+    final subtitle = showDate ? '$label · ${relativeDay(tx.date, store.today)}' : label;
     return ListTile(
       contentPadding: const EdgeInsets.symmetric(horizontal: 14),
       leading: CategoryBadge(tx.category),

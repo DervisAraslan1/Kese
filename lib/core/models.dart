@@ -32,6 +32,9 @@ class Transaction {
     required this.category,
     required this.date,
     required this.createdAt,
+    this.planId,
+    this.planIndex,
+    this.planCount,
   });
 
   final String id;
@@ -46,7 +49,13 @@ class Transaction {
   final String date;
   final String createdAt;
 
+  /// Set on every installment of a plan; [planIndex] counts from 1.
+  final String? planId;
+  final int? planIndex;
+  final int? planCount;
+
   bool get isExpense => type == TxType.expense;
+  bool get isInstallment => planId != null;
 
   Transaction copyWith({
     TxType? type,
@@ -63,6 +72,9 @@ class Transaction {
         category: category ?? this.category,
         date: date ?? this.date,
         createdAt: createdAt,
+        planId: planId,
+        planIndex: planIndex,
+        planCount: planCount,
       );
 
   Map<String, Object?> toJson() => {
@@ -73,6 +85,11 @@ class Transaction {
         'category': category.name,
         'date': date,
         'createdAt': createdAt,
+        if (planId != null) ...{
+          'planId': planId,
+          'planIndex': planIndex,
+          'planCount': planCount,
+        },
       };
 
   /// Rejects anything the app could not safely work with.
@@ -85,6 +102,9 @@ class Transaction {
     final category = json['category'];
     final date = json['date'];
     final createdAt = json['createdAt'];
+    final planId = json['planId'];
+    final planIndex = json['planIndex'];
+    final planCount = json['planCount'];
 
     final parsedType = TxType.values.asNameMap()[type];
     final parsedCategory = Category.values.asNameMap()[category];
@@ -100,7 +120,18 @@ class Transaction {
         date is String &&
         isDateKey(date) &&
         createdAt is String &&
-        DateTime.tryParse(createdAt) != null;
+        DateTime.tryParse(createdAt) != null &&
+        (planId == null
+            ? planIndex == null && planCount == null
+            : planId is String &&
+                planId.isNotEmpty &&
+                parsedType == TxType.expense &&
+                planCount is int &&
+                planCount >= minInstallments &&
+                planCount <= maxInstallments &&
+                planIndex is int &&
+                planIndex >= 1 &&
+                planIndex <= planCount);
     if (!valid) throw const FormatException('İşlem kaydı geçersiz.');
 
     return Transaction(
@@ -110,6 +141,104 @@ class Transaction {
       title: title,
       category: parsedCategory,
       date: date,
+      createdAt: createdAt,
+      planId: planId as String?,
+      planIndex: planIndex as int?,
+      planCount: planCount as int?,
+    );
+  }
+}
+
+const minInstallments = 2;
+const maxInstallments = 36;
+
+enum DebtKind {
+  owe('Borcum'),
+  owed('Alacağım');
+
+  const DebtKind(this.label);
+  final String label;
+}
+
+/// Money owed between people. Like a goal it stays outside the month's budget:
+/// borrowing is not income and paying it back is not spending.
+class Debt {
+  const Debt({
+    required this.id,
+    required this.kind,
+    required this.title,
+    required this.amount,
+    required this.paid,
+    required this.createdAt,
+    this.due,
+  });
+
+  final String id;
+  final DebtKind kind;
+  final String title;
+
+  /// Whole kuruş.
+  final int amount;
+  final int paid;
+
+  /// Local calendar day, YYYY-MM-DD. Most debts between friends have none.
+  final String? due;
+  final String createdAt;
+
+  bool get settled => paid >= amount;
+  int get remaining => amount - paid;
+
+  Debt copyWith({int? paid}) => Debt(
+        id: id,
+        kind: kind,
+        title: title,
+        amount: amount,
+        paid: paid ?? this.paid,
+        due: due,
+        createdAt: createdAt,
+      );
+
+  Map<String, Object?> toJson() => {
+        'id': id,
+        'kind': kind.name,
+        'title': title,
+        'amount': amount,
+        'paid': paid,
+        'due': due,
+        'createdAt': createdAt,
+      };
+
+  factory Debt.fromJson(Object? json) {
+    if (json is! Map) throw const FormatException('Borç kaydı okunamadı.');
+    final id = json['id'];
+    final kind = DebtKind.values.asNameMap()[json['kind']];
+    final title = json['title'];
+    final amount = json['amount'];
+    final paid = json['paid'];
+    final due = json['due'];
+    final createdAt = json['createdAt'];
+    final valid = id is String &&
+        id.isNotEmpty &&
+        kind != null &&
+        title is String &&
+        title.trim().isNotEmpty &&
+        amount is int &&
+        amount > 0 &&
+        amount <= maxAmount &&
+        paid is int &&
+        paid >= 0 &&
+        paid <= amount &&
+        (due == null || (due is String && isDateKey(due))) &&
+        createdAt is String &&
+        DateTime.tryParse(createdAt) != null;
+    if (!valid) throw const FormatException('Borç kaydı geçersiz.');
+    return Debt(
+      id: id,
+      kind: kind,
+      title: title,
+      amount: amount,
+      paid: paid,
+      due: due as String?,
       createdAt: createdAt,
     );
   }
@@ -220,6 +349,7 @@ class AppData {
     Map<String, FeedbackCount>? feedback,
     Map<String, String>? dismissed,
     List<SavingsGoal>? goals,
+    List<Debt>? debts,
     Set<String>? notified,
     this.customColors,
     this.lockEnabled = false,
@@ -230,13 +360,14 @@ class AppData {
     this.onboarded = false,
     this.demo = false,
   })  : goals = goals ?? [],
+        debts = debts ?? [],
         notified = notified ?? {},
         transactions = transactions ?? [],
         limits = limits ?? {},
         feedback = feedback ?? {},
         dismissed = dismissed ?? {};
 
-  static const version = 1;
+  static const version = 2;
 
   List<Transaction> transactions;
   Map<Category, int> limits;
@@ -245,6 +376,7 @@ class AppData {
   /// Insight key → the day it may appear again.
   Map<String, String> dismissed;
   List<SavingsGoal> goals;
+  List<Debt> debts;
 
   /// Limit alerts already sent, so each fires once a month.
   Set<String> notified;
@@ -266,6 +398,7 @@ class AppData {
         },
         'dismissed': dismissed,
         'goals': goals.map((g) => g.toJson()).toList(),
+        'debts': debts.map((d) => d.toJson()).toList(),
         'notified': notified.toList(),
         'customColors': customColors?.toJson(),
         'lockEnabled': lockEnabled,
@@ -303,6 +436,7 @@ class AppData {
       feedback: _readFeedback(json['feedback']),
       dismissed: _readDismissed(json['dismissed']),
       goals: _readGoals(json['goals']),
+      debts: _readDebts(json['debts']),
       notified: _readNotified(json['notified']),
       customColors: json['customColors'] == null
           ? null
@@ -325,6 +459,16 @@ class AppData {
       throw const FormatException('Aynı hedef iki kez kayıtlı.');
     }
     return goals;
+  }
+
+  static List<Debt> _readDebts(Object? raw) {
+    if (raw == null) return [];
+    if (raw is! List) throw const FormatException('Borçlar geçersiz.');
+    final debts = raw.map(Debt.fromJson).toList();
+    if (debts.map((d) => d.id).toSet().length != debts.length) {
+      throw const FormatException('Aynı borç iki kez kayıtlı.');
+    }
+    return debts;
   }
 
   static Set<String> _readNotified(Object? raw) {
