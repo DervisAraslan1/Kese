@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <!-- A drawstring pouch: Kese. -->
+    <path
+        android:fillColor="#3FD6A0"
+        android:pathData="M42,36 L66,36 L60,46 C72,52 78,62 78,70 C78,80 68,84 54,84 C40,84 30,80 30,70 C30,62 36,52 48,46 Z" />
+    <path
+        android:fillColor="#0F2219"
+        android:pathData="M45,45 L63,45 L63,48.5 L45,48.5 Z" />
+    <path
+        android:fillColor="#0F2219"
+        android:pathData="M50,58 L58,58 L54,64 L58,64 L58,67 L55.5,67 L55.5,70 L58,70 L58,73 L50,73 L50,70 L52.5,70 L52.5,67 L50,67 L50,64 L54,64 Z" />
+</vector>
