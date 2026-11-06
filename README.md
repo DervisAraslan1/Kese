@@ -2,6 +2,12 @@
 
 Harcamanı tek satırda yaz, paranın nereye gittiğini gör. Kişisel bütçe takibi için Android uygulaması. Veriler yalnızca telefonda durur: hesap yok, sunucu yok, uygulamanın internet izni de yok.
 
+## Canlı kese
+
+Ana ekrandaki kese paranla birlikte yaşar. Sıvı seviyesi bu ayki gelirinin kalan payıdır; yarısının altına inince kehribara, sonra kırmızıya döner. Harcayınca para keseden uçar, gelir girince içine düşer. Keseye dokununca sallanır.
+
+Sürekli hareket yalnızca ekran görünürken çalışır ve Android'in **Animasyonları kaldır** ayarına uyar.
+
 ## Hızlı ekleme
 
 ```
@@ -73,6 +79,10 @@ Telefonun widget listesinden **Kese**'yi ekle. Bu ayki kalan parayı gösterir, 
 ## Özel tema
 
 **Ayarlar → Tema → Özel** ile vurgu ve arka plan rengini seçersin, gerisi bunlardan türetilir. Yazı renkleri her renkte okunaklı kalacak şekilde hesaplanır; vurgu arka planda kayboluyorsa uyarı çıkar.
+
+## Yazı tipi
+
+Manrope, SIL Open Font License ile `assets/fonts/` içindedir. Boyutu düşürmek için Türkçe ve Latin karakterlere indirilmiş sabit ağırlıklar kullanılır.
 
 ## Geliştirme
 

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import '../core/models.dart';
 
@@ -112,6 +113,9 @@ Color _bestText(Color background) =>
         ? Colors.white
         : Colors.black;
 
+/// The readable text color for anything drawn on [background].
+Color readableOn(Color background) => _bestText(background);
+
 /// [preferred] moved toward [ink] only as far as needed to be readable.
 Color _readable(Color preferred, Color ink, Color background) {
   for (var mix = 0.0; mix < 1; mix += 0.1) {
@@ -198,9 +202,11 @@ ThemeData buildTheme(KeseTheme t) {
     outline: t.inkSoft.withValues(alpha: 0.5),
     outlineVariant: t.inkSoft.withValues(alpha: 0.18),
   );
-  final radius = BorderRadius.circular(18);
+  final radius = BorderRadius.circular(24);
+  final hairline = BorderSide(color: t.ink.withValues(alpha: 0.09));
   return ThemeData(
     useMaterial3: true,
+    fontFamily: 'Manrope',
     colorScheme: scheme,
     scaffoldBackgroundColor: t.background,
     extensions: [KeseColors(good: t.good, danger: t.danger)],
@@ -208,17 +214,44 @@ ThemeData buildTheme(KeseTheme t) {
       backgroundColor: t.background,
       surfaceTintColor: Colors.transparent,
       foregroundColor: t.ink,
+      // The bar is see-through on the main pages, so Flutter cannot work out
+      // the status bar's color from it.
+      systemOverlayStyle: t.brightness == Brightness.dark
+          ? SystemUiOverlayStyle.light
+          : SystemUiOverlayStyle.dark,
     ),
     cardTheme: CardThemeData(
-      color: t.surface,
+      // See-through enough for the light behind the app to pass under it.
+      color: t.surface.withValues(alpha: 0.74),
       elevation: 0,
       margin: EdgeInsets.zero,
-      shape: RoundedRectangleBorder(borderRadius: radius),
+      shape: RoundedRectangleBorder(borderRadius: radius, side: hairline),
     ),
     navigationBarTheme: NavigationBarThemeData(
-      backgroundColor: t.surface,
-      indicatorColor: t.accent.withValues(alpha: 0.2),
+      backgroundColor: Colors.transparent,
+      elevation: 0,
+      height: 66,
+      indicatorColor: t.accent.withValues(alpha: 0.24),
       surfaceTintColor: Colors.transparent,
+      labelTextStyle: WidgetStateProperty.all(
+        const TextStyle(fontSize: 11.5, fontWeight: FontWeight.w700),
+      ),
+    ),
+    filledButtonTheme: FilledButtonThemeData(
+      style: FilledButton.styleFrom(shape: const StadiumBorder()),
+    ),
+    floatingActionButtonTheme: FloatingActionButtonThemeData(
+      backgroundColor: t.accent,
+      foregroundColor: t.onAccent,
+      elevation: 0,
+      focusElevation: 0,
+      hoverElevation: 0,
+      highlightElevation: 0,
+      extendedTextStyle: const TextStyle(fontWeight: FontWeight.w800, fontSize: 15),
+      shape: const StadiumBorder(),
+    ),
+    progressIndicatorTheme: ProgressIndicatorThemeData(
+      borderRadius: BorderRadius.circular(8),
     ),
     bottomSheetTheme: BottomSheetThemeData(
       backgroundColor: t.surface,

@@ -5,8 +5,10 @@ import '../core/insights.dart';
 import '../core/models.dart';
 import '../core/money.dart';
 import '../core/store.dart';
+import 'ambient.dart';
 import 'debts.dart';
 import 'goals.dart';
+import 'pouch.dart';
 import 'theme.dart';
 import 'widgets.dart';
 
@@ -34,24 +36,30 @@ class HomePage extends StatelessWidget {
         return byDate != 0 ? byDate : b.createdAt.compareTo(a.createdAt);
       });
 
+    var order = 0;
+    Widget reveal(Widget child) => Reveal(index: order++, child: child);
+
     return ListView(
-      padding: const EdgeInsets.fromLTRB(16, 12, 16, 96),
+      padding: EdgeInsets.fromLTRB(16, 4, 16, pageBottomInset(context)),
       children: [
         if (store.recovered)
           const _Notice(
             text: 'Kayıtlı veri okunamadı. Dosya silinmedi, kenara alındı ve yeni bir başlangıç yapıldı.',
           ),
         if (store.data.demo) const _DemoNotice(),
-        Text(formatMonth(month), style: Theme.of(context).textTheme.titleMedium),
-        const SizedBox(height: 10),
+        Text(
+          formatMonth(month),
+          style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant),
+        ),
+        const SizedBox(height: 6),
         _Hero(spent: spent, earned: earned, forecast: forecast),
         if (insights.isNotEmpty) ...[
-          const SectionTitle('Sana özel öneriler'),
+          reveal(const SectionTitle('Sana özel öneriler')),
           for (final insight in insights)
-            Padding(
+            reveal(Padding(
               padding: const EdgeInsets.only(bottom: 10),
               child: _InsightCard(insight),
-            ),
+            )),
         ],
         if (store.data.limits.isNotEmpty) ...[
           const SectionTitle('Limitler'),
@@ -105,48 +113,70 @@ class _Hero extends StatelessWidget {
     final kese = context.keseColors;
     final left = earned - spent;
     final forecast = this.forecast;
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(20),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text('Bu ay kalan', style: TextStyle(color: colors.onSurfaceVariant)),
-            const SizedBox(height: 4),
-            FittedBox(
-              fit: BoxFit.scaleDown,
-              alignment: Alignment.centerLeft,
-              child: Text(
-                formatMoney(left),
-                style: Theme.of(context).textTheme.displaySmall?.copyWith(
-                      fontWeight: FontWeight.w800,
-                      fontFeatures: tabular,
-                      color: left < 0 ? kese.danger : colors.onSurface,
-                    ),
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        LivePouch(
+          level: pouchLevel(spent: spent, earned: earned),
+          amount: left,
+          // The mask paints the text, so only its shape matters here.
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Text(
+                'Bu ay kalan',
+                style: TextStyle(color: Colors.white, fontWeight: FontWeight.w700, fontSize: 13),
               ),
-            ),
-            const SizedBox(height: 14),
-            Row(
-              children: [
-                Expanded(child: _Stat('Gelir', earned, kese.good)),
-                Expanded(child: _Stat('Gider', spent, colors.onSurface)),
-              ],
-            ),
-            if (forecast != null) ...[
-              const Divider(height: 28),
-              Text(
-                'Ay sonu tahmini: ${formatMoney(forecast.projected)} harcama, '
-                '${forecast.balance < 0 ? '${formatMoney(-forecast.balance)} eksi' : '${formatMoney(forecast.balance)} artı'}.',
-              ),
-              const SizedBox(height: 4),
-              Text(
-                'Son ${forecast.basisDays} günün verisine dayanıyor.',
-                style: TextStyle(color: colors.onSurfaceVariant, fontSize: 12.5),
+              FittedBox(
+                fit: BoxFit.scaleDown,
+                child: TweenAnimationBuilder<int>(
+                  tween: IntTween(end: left),
+                  duration: const Duration(milliseconds: 900),
+                  curve: Curves.easeOutCubic,
+                  builder: (context, value, _) => Text(
+                    formatMoney(value),
+                    style: Theme.of(context).textTheme.displaySmall?.copyWith(
+                          color: Colors.white,
+                          fontWeight: FontWeight.w800,
+                          letterSpacing: -1.5,
+                          fontFeatures: tabular,
+                        ),
+                  ),
+                ),
               ),
             ],
-          ],
+          ),
         ),
-      ),
+        const SizedBox(height: 14),
+        Card(
+          child: Padding(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Expanded(child: _Stat('Gelir', earned, kese.good)),
+                    Expanded(child: _Stat('Gider', spent, colors.onSurface)),
+                  ],
+                ),
+                if (forecast != null) ...[
+                  const Divider(height: 24),
+                  Text(
+                    'Ay sonu tahmini: ${formatMoney(forecast.projected)} harcama, '
+                    '${forecast.balance < 0 ? '${formatMoney(-forecast.balance)} eksi' : '${formatMoney(forecast.balance)} artı'}.',
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    'Son ${forecast.basisDays} günün verisine dayanıyor.',
+                    style: TextStyle(color: colors.onSurfaceVariant, fontSize: 12.5),
+                  ),
+                ],
+              ],
+            ),
+          ),
+        ),
+      ],
     );
   }
 }

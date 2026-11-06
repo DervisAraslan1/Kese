@@ -26,6 +26,13 @@ Future<void> quickAdd(WidgetTester tester, String text) async {
   await tester.pumpAndSettle();
 }
 
+/// Scrolls like a person would, clear of the bar floating over the page.
+Future<void> bringIntoView(WidgetTester tester, Finder target) async {
+  await tester.scrollUntilVisible(target, 200);
+  await Scrollable.ensureVisible(tester.element(target), alignment: 0.3);
+  await tester.pumpAndSettle();
+}
+
 void main() {
   testWidgets('starts on the welcome screen, then an empty month', (tester) async {
     final store = makeStore();
@@ -44,8 +51,7 @@ void main() {
 
     await quickAdd(tester, 'market 340 tl');
     expect(store.transactions.single.amount, 34000);
-    expect(find.text('-340 ₺'), findsNWidgets(2), reason: 'hero and list row');
-
+    expect(find.text('-340 ₺'), findsOneWidget, reason: 'the pouch');
     await tester.tap(find.text('Geri al'));
     await tester.pumpAndSettle();
     expect(store.transactions, isEmpty);
@@ -67,6 +73,7 @@ void main() {
     await tester.pump(const Duration(seconds: 6));
     await tester.pumpAndSettle();
 
+    await bringIntoView(tester, find.text('kahve'));
     await tester.fling(find.text('kahve'), const Offset(-500, 0), 1200);
     await tester.pumpAndSettle();
     expect(store.transactions, isEmpty);
@@ -83,6 +90,7 @@ void main() {
     await tester.pump(const Duration(seconds: 6));
     await tester.pumpAndSettle();
 
+    await bringIntoView(tester, find.text('kahve'));
     await tester.tap(find.text('kahve'));
     await tester.pumpAndSettle();
     await tester.enterText(find.widgetWithText(TextFormField, 'Tutar'), '1.250,75');
@@ -97,6 +105,7 @@ void main() {
 
     await quickAdd(tester, 'telefon 30.000 6 taksit');
     expect(store.transactions.length, 6);
+    await bringIntoView(tester, find.text('25.000 ₺ kaldı'));
     expect(find.text('Taksitler'), findsOneWidget);
     expect(find.text('Aralık 2026 taksitleri: 5.000 ₺'), findsOneWidget);
     expect(find.text('25.000 ₺ kaldı'), findsOneWidget);
@@ -147,6 +156,7 @@ void main() {
     await tester.pump(const Duration(seconds: 6));
     await tester.pumpAndSettle();
 
+    await bringIntoView(tester, find.text('25.000 ₺ kaldı'));
     await tester.tap(find.text('25.000 ₺ kaldı'));
     await tester.pumpAndSettle();
     await tester.tap(find.text('Kalan taksitleri sil'));
@@ -165,7 +175,7 @@ void main() {
     await quickAdd(tester, 'telefon 30.000 3 taksit');
     await tester.pump(const Duration(seconds: 6));
     await tester.pumpAndSettle();
-    await tester.scrollUntilVisible(find.textContaining('Taksit 1/3'), 200);
+    await bringIntoView(tester, find.textContaining('Taksit 1/3'));
     expect(find.textContaining('Taksit 1/3'), findsOneWidget);
     expect(find.textContaining('Taksit 2/3'), findsNothing);
 
@@ -190,7 +200,7 @@ void main() {
     await tester.pump(const Duration(seconds: 6));
     await tester.pumpAndSettle();
 
-    await tester.scrollUntilVisible(find.text('ali'), 200);
+    await bringIntoView(tester, find.text('ali'));
     await tester.tap(find.text('ali'));
     await tester.pumpAndSettle();
     await tester.enterText(find.widgetWithText(TextField, 'Tutar'), '400');
@@ -212,7 +222,7 @@ void main() {
   testWidgets('the debt dialog validates, then saves with a kind', (tester) async {
     final store = makeStore()..startEmpty();
     await pumpApp(tester, store);
-    await tester.scrollUntilVisible(find.byTooltip('Yeni borç veya alacak'), 200);
+    await bringIntoView(tester, find.byTooltip('Yeni borç veya alacak'));
     await tester.tap(find.byTooltip('Yeni borç veya alacak'));
     await tester.pumpAndSettle();
 

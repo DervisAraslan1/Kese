@@ -115,7 +115,7 @@ class _TransactionsPageState extends State<TransactionsPage> {
           child: rows.isEmpty
               ? const EmptyNote('Bu seçimde işlem yok.')
               : ListView.builder(
-                  padding: const EdgeInsets.only(bottom: 96),
+                  padding: EdgeInsets.only(bottom: pageBottomInset(context)),
                   itemCount: rows.length,
                   itemBuilder: (context, index) {
                     final row = rows[index];

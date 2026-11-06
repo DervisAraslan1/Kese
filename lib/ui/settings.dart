@@ -123,7 +123,7 @@ class SettingsPage extends StatelessWidget {
     final store = StoreScope.of(context);
     final colors = Theme.of(context).colorScheme;
     return ListView(
-      padding: const EdgeInsets.fromLTRB(16, 4, 16, 96),
+      padding: EdgeInsets.fromLTRB(16, 4, 16, pageBottomInset(context)),
       children: [
         const SectionTitle('Aylık limitler'),
         Card(

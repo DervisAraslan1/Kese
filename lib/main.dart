@@ -18,5 +18,5 @@ Future<void> main() async {
     debugPrint('Bildirimler başlatılamadı: $error');
   }
   final sync = PhoneSync(store, phone)..start();
-  runApp(KeseApp(store: store, phone: phone, sync: sync));
+  runApp(KeseApp(store: store, phone: phone, sync: sync, ambient: true));
 }

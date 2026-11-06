@@ -30,6 +30,9 @@ class PhoneScope extends InheritedWidget {
 
 const tabular = [FontFeature.tabularFigures()];
 
+/// Keeps the end of a page clear of the floating bar and the add button.
+double pageBottomInset(BuildContext context) => MediaQuery.paddingOf(context).bottom + 84;
+
 void showMessage(BuildContext context, String message) {
   ScaffoldMessenger.of(context)
     ..hideCurrentSnackBar()
@@ -69,7 +72,7 @@ class SectionTitle extends StatelessWidget {
                   style: Theme.of(context)
                       .textTheme
                       .titleMedium
-                      ?.copyWith(fontWeight: FontWeight.w700),
+                      ?.copyWith(fontWeight: FontWeight.w800, letterSpacing: -0.3),
                 ),
               ),
             ),
