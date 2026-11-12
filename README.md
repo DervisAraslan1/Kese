@@ -1,6 +1,18 @@
 # Kese
 
-Harcamanı tek satırda yaz, paranın nereye gittiğini gör. Kişisel bütçe takibi için Android uygulaması. Veriler yalnızca telefonda durur: hesap yok, sunucu yok, uygulamanın internet izni de yok.
+Harcamanı tek satırda yaz, paranın nereye gittiğini gör. Kişisel bütçe takibi için Android uygulaması. Verilerin kendi hesabında saklanır ve internet yokken de çalışır.
+
+## Hesap ve eşitleme
+
+Uygulama girişle açılır: e-posta ve şifreyle ya da Google hesabınla. Veriler Firebase'de (Firestore) hesabına bağlı durur; telefon değiştirince ya da uygulamayı silip kurunca giriş yapman yeterlidir.
+
+- **Çevrimdışı:** Telefonda her zaman tam bir kopya bulunur. İnternet yokken ekleme, düzenleme ve silme aynen çalışır; bağlanınca kendiliğinden gönderilir. Yalnızca bir telefondaki **ilk giriş** internet ister.
+- **Birden fazla telefon:** Her işlem, hedef ve borç ayrı kaydedilir, bu yüzden iki telefonda farklı şeyleri değiştirmek birbirini ezmez. Aynı kaydı iki yerde değiştirirsen son yazılan kalır.
+- **Telefonda kalanlar:** Uygulama kilidi ve bildirim ayarları hesaba gitmez; her telefon kendi ayarını tutar.
+- **Eski veriler:** Hesap özelliğinden önce girilmiş veriler, boş bir hesaba ilk girişte kendiliğinden o hesaba taşınır. Hesapta zaten veri varsa karıştırılmaz; eski dosya telefonda durur.
+- **Çıkış:** Ayarlar → Hesap. Çıkınca widget tutarı gizler, hatırlatmalar silinir. İnternet yokken girilip henüz gönderilmemiş değişiklikler, aynı hesaba tekrar girene kadar bekler.
+
+Herkes yalnızca kendi verisini okuyup yazabilir; kural `firestore.rules` içindedir.
 
 ## Canlı kese
 
@@ -74,7 +86,7 @@ Telefonun widget listesinden **Kese**'yi ekle. Bu ayki kalan parayı gösterir, 
 
 ## Uygulama kilidi
 
-**Ayarlar → Güvenlik** altından açılır. Parmak izi, yüz veya ekran kilidi ister; 30 saniyeden uzun arka planda kalınca tekrar kilitlenir. Kilit açıkken widget tutarı gizler. Telefonun ekran kilidini kaldırırsan verilerine erişimin kesilmesin diye kilit kendiliğinden devre dışı kalır. Kilit ayarı yedekle taşınmaz.
+**Ayarlar → Güvenlik** altından açılır. Parmak izi, yüz veya ekran kilidi ister; 30 saniyeden uzun arka planda kalınca tekrar kilitlenir. Kilit açıkken widget tutarı gizler. Telefonun ekran kilidini kaldırırsan verilerine erişimin kesilmesin diye kilit kendiliğinden devre dışı kalır. Kilit ayarı telefona aittir: yedekle ya da hesapla başka telefona taşınmaz.
 
 ## Özel tema
 
@@ -86,7 +98,7 @@ Manrope, SIL Open Font License ile `assets/fonts/` içindedir. Boyutu düşürme
 
 ## Geliştirme
 
-Flutter 3.47 ve Android SDK gerekir.
+Flutter 3.47 ve Android SDK gerekir. Firebase projesinin kimliği `lib/firebase_options.dart` içindedir; Firestore kuralları `firebase deploy --only firestore:rules` ile yayınlanır. Google ile girişin çalışması için APK'yı imzalayan anahtarın SHA-1 ve SHA-256 parmak izleri Firebase'deki Android uygulamasına ekli olmalıdır.
 
 ```bash
 flutter test                # testler
@@ -109,4 +121,4 @@ Anahtar kaybolursa uygulama güncellenemez, kullanıcıların silip yeniden kurm
 
 ## Yedekleme
 
-Android'in otomatik bulut yedeği kapalıdır. Uygulamayı silersen veriler de silinir, bu yüzden **Ayarlar → Yedeği dışa aktar** ile ara sıra yedek al.
+Veriler hesabında durduğu için uygulamayı silmek onları silmez. Yine de **Ayarlar → Yedeği dışa aktar** ile dosya olarak yedek alabilir, **Yedekten yükle** ile geri koyabilirsin. **Tümünü sil** hesaptaki verileri de siler.

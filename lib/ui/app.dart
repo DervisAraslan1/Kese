@@ -17,6 +17,50 @@ import 'theme.dart';
 import 'transactions.dart';
 import 'widgets.dart';
 
+/// The app's window: theme, language and the moving background. Shared by the
+/// app itself and the screens shown before anyone is signed in.
+class KeseFrame extends StatelessWidget {
+  const KeseFrame({
+    super.key,
+    required this.theme,
+    required this.home,
+    this.ambient = false,
+    this.wrap,
+  });
+
+  final KeseTheme theme;
+  final Widget home;
+  final bool ambient;
+
+  /// Goes around every route, dialogs and sheets included.
+  final Widget Function(Widget child)? wrap;
+
+  @override
+  Widget build(BuildContext context) => MaterialApp(
+        title: 'Kese',
+        debugShowCheckedModeBanner: false,
+        theme: buildTheme(theme),
+        locale: const Locale('tr', 'TR'),
+        supportedLocales: const [Locale('tr', 'TR')],
+        localizationsDelegates: const [
+          GlobalMaterialLocalizations.delegate,
+          GlobalWidgetsLocalizations.delegate,
+          GlobalCupertinoLocalizations.delegate,
+        ],
+        builder: (context, child) => Ambient(
+          enabled: ambient,
+          child: Stack(
+            fit: StackFit.expand,
+            children: [
+              Aurora(background: theme.background, color: theme.accent),
+              wrap?.call(child!) ?? child!,
+            ],
+          ),
+        ),
+        home: home,
+      );
+}
+
 class KeseApp extends StatelessWidget {
   const KeseApp({
     super.key,
@@ -38,30 +82,10 @@ class KeseApp extends StatelessWidget {
         store: store,
         child: ListenableBuilder(
           listenable: store,
-          builder: (context, _) => MaterialApp(
-            title: 'Kese',
-            debugShowCheckedModeBanner: false,
-            theme: buildTheme(resolveTheme(store.data)),
-            locale: const Locale('tr', 'TR'),
-            supportedLocales: const [Locale('tr', 'TR')],
-            localizationsDelegates: const [
-              GlobalMaterialLocalizations.delegate,
-              GlobalWidgetsLocalizations.delegate,
-              GlobalCupertinoLocalizations.delegate,
-            ],
-            builder: (context, child) {
-              final theme = resolveTheme(store.data);
-              return Ambient(
-                enabled: ambient,
-                child: Stack(
-                  fit: StackFit.expand,
-                  children: [
-                    Aurora(background: theme.background, color: theme.accent),
-                    PhoneScope(phone: phone, child: LockGate(child: child!)),
-                  ],
-                ),
-              );
-            },
+          builder: (context, _) => KeseFrame(
+            theme: resolveTheme(store.data),
+            ambient: ambient,
+            wrap: (child) => PhoneScope(phone: phone, child: LockGate(child: child)),
             home: store.data.onboarded ? Shell(sync: sync) : const Welcome(),
           ),
         ),
@@ -102,7 +126,7 @@ class Welcome extends StatelessWidget {
               const SizedBox(height: 10),
               Text(
                 'Harcamanı tek satırda yaz, paranın nereye gittiğini gör. '
-                'Veriler yalnızca bu telefonda kalır.',
+                'Verilerin hesabında saklanır, internet yokken de çalışır.',
                 textAlign: TextAlign.center,
                 style: TextStyle(color: colors.onSurfaceVariant, fontSize: 16),
               ),

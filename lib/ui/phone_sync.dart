@@ -16,9 +16,9 @@ const _hiddenAmount = '••••';
 String _hex(Color color) =>
     '#${(color.toARGB32() & 0xFFFFFF).toRadixString(16).padLeft(6, '0').toUpperCase()}';
 
-/// The month's balance, hidden when the app is locked: the widget is on show
-/// to anyone holding the phone.
-WidgetSnapshot buildWidgetSnapshot(AppData data, String today) {
+/// The month's balance, hidden when the app is locked or nobody is signed in:
+/// the widget is on show to anyone holding the phone.
+WidgetSnapshot buildWidgetSnapshot(AppData data, String today, {bool signedOut = false}) {
   final month = monthOf(today);
   final left = data.transactions
       .where((t) => monthOf(t.date) == month)
@@ -26,7 +26,7 @@ WidgetSnapshot buildWidgetSnapshot(AppData data, String today) {
   final theme = resolveTheme(data);
   return WidgetSnapshot(
     title: formatMonth(month),
-    amount: data.lockEnabled ? _hiddenAmount : formatMoney(left),
+    amount: data.lockEnabled || signedOut ? _hiddenAmount : formatMoney(left),
     background: _hex(theme.surface),
     ink: _hex(theme.ink),
     inkSoft: _hex(theme.inkSoft),

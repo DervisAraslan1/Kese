@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../core/auth.dart';
 import '../core/date.dart';
 import '../core/models.dart';
 import '../core/money.dart';
@@ -26,6 +27,19 @@ class PhoneScope extends InheritedWidget {
 
   @override
   bool updateShouldNotify(PhoneScope oldWidget) => phone != oldWidget.phone;
+}
+
+/// Present only when the app runs with accounts.
+class AuthScope extends InheritedWidget {
+  const AuthScope({super.key, required this.auth, required super.child});
+
+  final Auth auth;
+
+  static Auth? maybeOf(BuildContext context) =>
+      context.getInheritedWidgetOfExactType<AuthScope>()?.auth;
+
+  @override
+  bool updateShouldNotify(AuthScope oldWidget) => auth != oldWidget.auth;
 }
 
 const tabular = [FontFeature.tabularFigures()];

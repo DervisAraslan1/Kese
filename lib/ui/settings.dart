@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
 
+import '../core/auth.dart';
 import '../core/date.dart';
 import '../core/models.dart';
 import '../core/money.dart';
@@ -74,6 +75,38 @@ class SettingsPage extends StatelessWidget {
     if (confirmed == true) store.startEmpty();
   }
 
+  /// Changes made without a connection are sent only while signed in, so
+  /// leaving is worth a moment's thought.
+  Future<void> _confirmSignOut(BuildContext context, Auth auth) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialog) => AlertDialog(
+        title: const Text('Çıkış yapılsın mı?'),
+        content: const Text(
+          'Verilerin hesabında kalır, tekrar giriş yapınca geri gelir. '
+          'İnternet yokken girdiğin işlemler varsa önce bağlanıp eşitlenmesini bekle; '
+          'yoksa tekrar giriş yapana kadar gönderilmezler.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialog, false),
+            child: const Text('Vazgeç'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(dialog, true),
+            child: const Text('Çıkış yap'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+    try {
+      await auth.signOut();
+    } catch (_) {
+      if (context.mounted) showMessage(context, 'Çıkış yapılamadı. Tekrar dene.');
+    }
+  }
+
   Future<void> _editLimit(BuildContext context, Store store, Category category) async {
     final current = store.data.limits[category];
     final result = await showDialog<_LimitResult>(
@@ -122,9 +155,33 @@ class SettingsPage extends StatelessWidget {
   Widget build(BuildContext context) {
     final store = StoreScope.of(context);
     final colors = Theme.of(context).colorScheme;
+    final auth = AuthScope.maybeOf(context);
+    final account = auth?.current;
     return ListView(
       padding: EdgeInsets.fromLTRB(16, 4, 16, pageBottomInset(context)),
       children: [
+        if (auth != null && account != null) ...[
+          const SectionTitle('Hesap'),
+          Card(
+            clipBehavior: Clip.antiAlias,
+            child: Column(
+              children: [
+                ListTile(
+                  leading: const Icon(Icons.account_circle_outlined),
+                  title: Text(account.name ?? account.email ?? 'Hesabın'),
+                  subtitle: account.name != null && account.email != null
+                      ? Text(account.email!)
+                      : null,
+                ),
+                ListTile(
+                  leading: const Icon(Icons.logout),
+                  title: const Text('Çıkış yap'),
+                  onTap: () => _confirmSignOut(context, auth),
+                ),
+              ],
+            ),
+          ),
+        ],
         const SectionTitle('Aylık limitler'),
         Card(
           clipBehavior: Clip.antiAlias,
@@ -208,8 +265,8 @@ class SettingsPage extends StatelessWidget {
               Padding(
                 padding: const EdgeInsets.fromLTRB(16, 14, 16, 4),
                 child: Text(
-                  '${store.transactions.length} işlem yalnızca bu telefonda duruyor. '
-                  'Uygulamayı silersen veriler de silinir, bu yüzden ara sıra yedek al.',
+                  '${store.transactions.length} işlem hesabında saklanıyor. İnternet yokken de '
+                  'çalışır, bağlanınca eşitlenir. Yedek almak yine de iyi bir alışkanlık.',
                   style: TextStyle(color: colors.onSurfaceVariant),
                 ),
               ),

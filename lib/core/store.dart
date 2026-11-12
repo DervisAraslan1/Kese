@@ -18,6 +18,16 @@ abstract class Persistence {
 
   /// Keeps unreadable data aside so the next save cannot overwrite it.
   Future<void> quarantine(String contents);
+
+  /// The whole document again, each time it changes somewhere else, such as
+  /// on another phone signed in to the same account.
+  Stream<String> get changes;
+}
+
+/// A save that was refused for a reason worth telling the user.
+class SaveFailure implements Exception {
+  const SaveFailure(this.message);
+  final String message;
 }
 
 /// A change that can be reversed. Each one reverts only what it changed, so
@@ -37,6 +47,7 @@ class Store extends ChangeNotifier {
   AppData _data = AppData();
   Future<void> _pending = Future.value();
   int _serial = 0;
+  StreamSubscription<String>? _remote;
 
   /// Set when a save fails, so the UI can warn instead of losing data quietly.
   final ValueNotifier<String?> saveError = ValueNotifier(null);
@@ -63,7 +74,26 @@ class Store extends ChangeNotifier {
         _data = AppData();
       }
     }
+    _remote ??= _persistence.changes.listen(_adopt);
     notifyListeners();
+  }
+
+  /// Takes over a document changed elsewhere. One this version cannot read is
+  /// left alone: what is on screen stays, and nothing is overwritten.
+  void _adopt(String raw) {
+    try {
+      _data = AppData.fromJson(jsonDecode(raw));
+    } on FormatException {
+      return;
+    }
+    notifyListeners();
+  }
+
+  @override
+  void dispose() {
+    _remote?.cancel();
+    saveError.dispose();
+    super.dispose();
   }
 
   /// Completes when every queued save has reached storage.
@@ -76,6 +106,8 @@ class Store extends ChangeNotifier {
       try {
         await _persistence.write(contents);
         saveError.value = null;
+      } on SaveFailure catch (failure) {
+        saveError.value = failure.message;
       } catch (_) {
         saveError.value = 'Değişiklikler kaydedilemedi. Telefonun depolama alanını kontrol et.';
       }

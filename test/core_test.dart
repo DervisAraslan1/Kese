@@ -29,6 +29,9 @@ class MemoryPersistence implements Persistence {
 
   @override
   Future<void> quarantine(String value) async => quarantined = value;
+
+  @override
+  Stream<String> get changes => const Stream.empty();
 }
 
 var _serial = 0;
