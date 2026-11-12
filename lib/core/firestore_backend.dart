@@ -22,7 +22,7 @@ class FirestoreBackend implements CloudBackend {
     );
   }
 
-  // Ids come from the app, but a backup file could carry anything.
+  // Ids come from the app, but data from an older version could carry anything.
   DocumentReference<Json> _item(String collection, String id) =>
       _user.collection(collection).doc(Uri.encodeComponent(id));
 

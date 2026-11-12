@@ -79,6 +79,10 @@ Store storeWith(List<Transaction> transactions, [MemoryPersistence? persistence]
   return store;
 }
 
+/// The store's document as it is saved, free to be altered.
+Map<String, dynamic> documentOf(Store store) =>
+    jsonDecode(jsonEncode(store.data.toJson())) as Map<String, dynamic>;
+
 ParsedEntry entry(String input, [List<Transaction> history = const []]) =>
     parseEntry(input, today, history).entry!;
 
@@ -634,10 +638,9 @@ void main() {
     });
   });
 
-  group('backup', () {
-    String backupWith(void Function(Map<String, dynamic>) change) {
-      final store = storeWith([tx(today, 'Kahve', 50)]);
-      final json = jsonDecode(store.exportBackup()) as Map<String, dynamic>;
+  group('saved data', () {
+    String savedWith(void Function(Map<String, dynamic>) change) {
+      final json = documentOf(storeWith([tx(today, 'Kahve', 50)]));
       change(json);
       return jsonEncode(json);
     }
@@ -651,59 +654,43 @@ void main() {
     test('round-trips everything', () {
       final source = storeWith([tx(today, 'Kahve', 50, category: Category.yemek)])
         ..setLimit(Category.yemek, 100000);
-      final target = storeWith([]);
-      target.importBackup(source.exportBackup());
+      final target = AppData.fromJson(documentOf(source));
       expect(target.transactions.single.title, 'Kahve');
       expect(target.transactions.single.category, Category.yemek);
-      expect(target.data.limits[Category.yemek], 100000);
+      expect(target.limits[Category.yemek], 100000);
     });
 
     test('regression: rejects every incomplete or invalid record', () {
       final bad = <String, String>{
         'not json': 'merhaba',
         'not an object': '[]',
-        'no version': backupWith((j) => j.remove('version')),
-        'future version': backupWith((j) => j['version'] = 99),
-        'no list': backupWith((j) => j.remove('transactions')),
-        'missing id': backupWith((j) => removeField(j, 'id')),
-        'missing type': backupWith((j) => removeField(j, 'type')),
-        'missing category': backupWith((j) => removeField(j, 'category')),
-        'missing date': backupWith((j) => removeField(j, 'date')),
-        'unknown category': backupWith((j) => setField(j, 'category', 'yok')),
-        'fractional amount': backupWith((j) => setField(j, 'amount', 12.5)),
-        'negative amount': backupWith((j) => setField(j, 'amount', -5)),
-        'zero amount': backupWith((j) => setField(j, 'amount', 0)),
-        'impossible date': backupWith((j) => setField(j, 'date', '2026-02-31')),
-        'blank title': backupWith((j) => setField(j, 'title', '  ')),
-        'bad limit': backupWith((j) => j['limits'] = {'yemek': -1}),
-        'unknown limit': backupWith((j) => j['limits'] = {'yok': 100}),
-        'bad feedback': backupWith((j) => j['feedback'] = {'x': 'y'}),
-        'bad dismissal': backupWith((j) => j['dismissed'] = {'x': 'dün'}),
-        'duplicate ids': backupWith((j) {
+        'no version': savedWith((j) => j.remove('version')),
+        'future version': savedWith((j) => j['version'] = 99),
+        'no list': savedWith((j) => j.remove('transactions')),
+        'missing id': savedWith((j) => removeField(j, 'id')),
+        'missing type': savedWith((j) => removeField(j, 'type')),
+        'missing category': savedWith((j) => removeField(j, 'category')),
+        'missing date': savedWith((j) => removeField(j, 'date')),
+        'unknown category': savedWith((j) => setField(j, 'category', 'yok')),
+        'fractional amount': savedWith((j) => setField(j, 'amount', 12.5)),
+        'negative amount': savedWith((j) => setField(j, 'amount', -5)),
+        'zero amount': savedWith((j) => setField(j, 'amount', 0)),
+        'impossible date': savedWith((j) => setField(j, 'date', '2026-02-31')),
+        'blank title': savedWith((j) => setField(j, 'title', '  ')),
+        'bad limit': savedWith((j) => j['limits'] = {'yemek': -1}),
+        'unknown limit': savedWith((j) => j['limits'] = {'yok': 100}),
+        'bad feedback': savedWith((j) => j['feedback'] = {'x': 'y'}),
+        'bad dismissal': savedWith((j) => j['dismissed'] = {'x': 'dün'}),
+        'duplicate ids': savedWith((j) {
           final list = j['transactions'] as List;
           list.add(list.first);
         }),
       };
 
       bad.forEach((name, contents) {
-        final store = storeWith([tx(today, 'Mevcut', 10)]);
-        expect(() => store.importBackup(contents), throwsFormatException, reason: name);
-        expect(store.transactions.single.title, 'Mevcut', reason: name);
+        expect(() => AppData.fromJson(jsonDecode(contents)), throwsFormatException,
+            reason: name);
       });
-    });
-
-    test('import can be undone', () {
-      final store = storeWith([tx(today, 'Mevcut', 10)]);
-      final undo = store.importBackup(storeWith([tx(today, 'Yeni', 20)]).exportBackup());
-      expect(store.transactions.single.title, 'Yeni');
-      undo.revert();
-      expect(store.transactions.single.title, 'Mevcut');
-    });
-
-    test('an import ends demo mode', () {
-      final store = storeWith([])..startWithDemo();
-      store.importBackup(storeWith([tx(today, 'Yeni', 20)]).exportBackup());
-      expect(store.data.demo, isFalse);
     });
   });
 }

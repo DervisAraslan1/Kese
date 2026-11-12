@@ -86,7 +86,7 @@ Telefonun widget listesinden **Kese**'yi ekle. Bu ayki kalan parayı gösterir, 
 
 ## Uygulama kilidi
 
-**Ayarlar → Güvenlik** altından açılır. Parmak izi, yüz veya ekran kilidi ister; 30 saniyeden uzun arka planda kalınca tekrar kilitlenir. Kilit açıkken widget tutarı gizler. Telefonun ekran kilidini kaldırırsan verilerine erişimin kesilmesin diye kilit kendiliğinden devre dışı kalır. Kilit ayarı telefona aittir: yedekle ya da hesapla başka telefona taşınmaz.
+**Ayarlar → Güvenlik** altından açılır. Parmak izi, yüz veya ekran kilidi ister; 30 saniyeden uzun arka planda kalınca tekrar kilitlenir. Kilit açıkken widget tutarı gizler. Telefonun ekran kilidini kaldırırsan verilerine erişimin kesilmesin diye kilit kendiliğinden devre dışı kalır. Kilit ayarı telefona aittir: hesapla başka telefona taşınmaz.
 
 ## Özel tema
 
@@ -119,6 +119,6 @@ keyPassword=...
 
 Anahtar kaybolursa uygulama güncellenemez, kullanıcıların silip yeniden kurması gerekir. Bu yüzden anahtarı ve şifresini bilgisayar dışında da yedekle. Yeni sürüm yayınlarken `pubspec.yaml` içindeki `version` değerinin `+` sonrasını artır.
 
-## Yedekleme
+## Veriler
 
-Veriler hesabında durduğu için uygulamayı silmek onları silmez. Yine de **Ayarlar → Yedeği dışa aktar** ile dosya olarak yedek alabilir, **Yedekten yükle** ile geri koyabilirsin. **Tümünü sil** hesaptaki verileri de siler.
+Veriler hesabında durduğu için uygulamayı silmek ya da telefon değiştirmek onları silmez; aynı hesapla girince geri gelir. **Tümünü sil** hesaptaki verileri de siler.

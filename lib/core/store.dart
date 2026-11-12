@@ -538,34 +538,4 @@ class Store extends ChangeNotifier {
     _data = _freshData();
     _changed();
   }
-
-  /// Backups are the whole document, in the same format as local storage.
-  String exportBackup() => const JsonEncoder.withIndent('  ').convert(_data.toJson());
-
-  /// Replaces everything, or throws [FormatException] and changes nothing.
-  Undo importBackup(String contents) {
-    final Object? decoded;
-    try {
-      decoded = jsonDecode(contents);
-    } on FormatException {
-      throw const FormatException('Bu dosya geçerli bir Kese yedeği değil.');
-    }
-    final next = AppData.fromJson(decoded);
-    final before = _data;
-    // The lock is deliberately not restored: a backup must never be able to
-    // lock someone out of a phone or switch off its protection.
-    _data = _freshData(transactions: next.transactions)
-      ..limits = next.limits
-      ..feedback = next.feedback
-      ..dismissed = next.dismissed
-      ..goals = next.goals
-      ..debts = next.debts
-      // Alerts this phone already showed stay shown.
-      ..notified = _data.notified;
-    _changed();
-    return Undo('${next.transactions.length} işlem yüklendi', () {
-      _data = before;
-      _changed();
-    });
-  }
 }

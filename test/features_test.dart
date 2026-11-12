@@ -8,7 +8,7 @@ import 'package:kese/core/reminders.dart';
 import 'package:kese/core/store.dart';
 import 'package:kese/ui/theme.dart';
 
-import 'core_test.dart' show MemoryPersistence, monthly, storeWith, today, tx;
+import 'core_test.dart' show MemoryPersistence, documentOf, monthly, storeWith, today, tx;
 
 void main() {
   group('Ödedim', () {
@@ -116,23 +116,22 @@ void main() {
       expect(estimateGoal(goalOf(100, saved: 100), [], today), isNull);
     });
 
-    test('rejects invalid goals in a backup', () {
-      final store = storeWith([]);
-      final good = jsonDecode(store.exportBackup()) as Map<String, dynamic>;
+    test('rejects invalid saved goals', () {
+      final good = documentOf(storeWith([]));
       for (final bad in [
         {'id': 'a', 'title': 'x', 'target': 0, 'saved': 0, 'createdAt': '2026-01-01'},
         {'id': 'a', 'title': ' ', 'target': 5, 'saved': 0, 'createdAt': '2026-01-01'},
         {'id': 'a', 'title': 'x', 'target': 5, 'saved': -1, 'createdAt': '2026-01-01'},
       ]) {
         good['goals'] = [bad];
-        expect(() => store.importBackup(jsonEncode(good)), throwsFormatException);
+        expect(() => AppData.fromJson(good), throwsFormatException);
       }
     });
   });
 
-  group('backup compatibility', () {
-    test('old backups without the new fields still load', () {
-      final old = jsonEncode({
+  group('saved data compatibility', () {
+    test('old data without the new fields still loads', () {
+      final old = {
         'version': 1,
         'transactions': [],
         'limits': {},
@@ -141,21 +140,8 @@ void main() {
         'theme': 'zumrut',
         'onboarded': true,
         'demo': false,
-      });
-      final store = storeWith([]);
-      store.importBackup(old);
-      expect(store.data.goals, isEmpty);
-    });
-
-    test('regression: a backup cannot change the lock', () {
-      final source = storeWith([])..setLock(true);
-      final target = storeWith([]);
-      target.importBackup(source.exportBackup());
-      expect(target.data.lockEnabled, isFalse);
-
-      final locked = storeWith([])..setLock(true);
-      locked.importBackup(storeWith([]).exportBackup());
-      expect(locked.data.lockEnabled, isTrue);
+      };
+      expect(AppData.fromJson(old).goals, isEmpty);
     });
 
     test('goals and colors survive a save and reload', () async {

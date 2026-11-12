@@ -9,7 +9,7 @@ import 'package:kese/core/plans.dart';
 import 'package:kese/core/reminders.dart';
 import 'package:kese/core/store.dart';
 
-import 'core_test.dart' show monthly, storeWith, today, tx;
+import 'core_test.dart' show documentOf, monthly, storeWith, today, tx;
 
 ParsedEntry _parse(String line) => parseEntry(line, today).entry!;
 String? _error(String line) => parseEntry(line, today).error;
@@ -267,29 +267,29 @@ void main() {
       ..addInstallments(_phone())
       ..addDebt(DebtKind.owed, 'Ali', 100000, due: '2026-12-01');
 
-    test('plans and debts survive a backup', () {
-      final store = storeWith([])..importBackup(filled().exportBackup());
-      expect(store.transactions.length, 6);
-      expect(store.transactions.first.planCount, 6);
-      expect(store.data.debts.single.due, '2026-12-01');
+    test('plans and debts survive saving', () {
+      final data = AppData.fromJson(documentOf(filled()));
+      expect(data.transactions.length, 6);
+      expect(data.transactions.first.planCount, 6);
+      expect(data.debts.single.due, '2026-12-01');
     });
 
-    test('a backup from the previous version still loads', () {
+    test('data from the previous version still loads', () {
       final old = {
         'version': 1,
         'transactions': [tx(today, 'Market', 100).toJson()],
       };
-      final store = storeWith([])..importBackup(jsonEncode(old));
-      expect(store.transactions.single.isInstallment, isFalse);
-      expect(store.data.debts, isEmpty);
+      final data = AppData.fromJson(jsonDecode(jsonEncode(old)));
+      expect(data.transactions.single.isInstallment, isFalse);
+      expect(data.debts, isEmpty);
     });
 
     test('rejects a broken plan or debt', () {
-      final good = jsonDecode(filled().exportBackup()) as Map<String, dynamic>;
+      final good = documentOf(filled());
       void expectRejected(void Function(Map<String, dynamic>) change) {
         final copy = jsonDecode(jsonEncode(good)) as Map<String, dynamic>;
         change(copy);
-        expect(() => storeWith([]).importBackup(jsonEncode(copy)), throwsFormatException);
+        expect(() => AppData.fromJson(copy), throwsFormatException);
       }
 
       Map<String, dynamic> first(Map<String, dynamic> j) =>

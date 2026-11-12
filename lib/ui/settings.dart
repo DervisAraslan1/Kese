@@ -1,10 +1,4 @@
-import 'dart:convert';
-import 'dart:io';
-
-import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
-import 'package:path_provider/path_provider.dart';
-import 'package:share_plus/share_plus.dart';
 
 import '../core/auth.dart';
 import '../core/date.dart';
@@ -19,35 +13,6 @@ import 'widgets.dart';
 class SettingsPage extends StatelessWidget {
   const SettingsPage({super.key});
 
-  Future<void> _export(BuildContext context, Store store) async {
-    try {
-      final directory = await getTemporaryDirectory();
-      final file = File('${directory.path}/kese-yedek-${store.today}.json');
-      await file.writeAsString(store.exportBackup(), flush: true);
-      await SharePlus.instance.share(ShareParams(
-        files: [XFile(file.path, mimeType: 'application/json')],
-        subject: 'Kese yedeği',
-      ));
-    } catch (_) {
-      if (context.mounted) showMessage(context, 'Yedek oluşturulamadı.');
-    }
-  }
-
-  Future<void> _import(BuildContext context, Store store) async {
-    try {
-      final picked = await FilePicker.pickFile();
-      if (picked == null) return;
-      final contents = utf8.decode(await picked.readAsBytes());
-      if (context.mounted) showUndo(context, store.importBackup(contents));
-    } on FormatException catch (error) {
-      if (context.mounted) {
-        showMessage(context, 'Yedek yüklenmedi, verilerin değişmedi. ${error.message}');
-      }
-    } catch (_) {
-      if (context.mounted) showMessage(context, 'Dosya okunamadı, verilerin değişmedi.');
-    }
-  }
-
   Future<void> _confirmDelete(BuildContext context, Store store) async {
     final count = store.transactions.length;
     final confirmed = await showDialog<bool>(
@@ -55,7 +20,7 @@ class SettingsPage extends StatelessWidget {
       builder: (dialog) => AlertDialog(
         title: const Text('Tüm veriler silinsin mi?'),
         content: Text(
-          '$count işlem, tüm limitler ve hedefler silinecek. Bu işlem geri alınamaz; önce yedek almak isteyebilirsin.',
+          '$count işlem, tüm limitler ve hedefler silinecek. Bu işlem geri alınamaz.',
         ),
         actions: [
           TextButton(
@@ -266,19 +231,9 @@ class SettingsPage extends StatelessWidget {
                 padding: const EdgeInsets.fromLTRB(16, 14, 16, 4),
                 child: Text(
                   '${store.transactions.length} işlem hesabında saklanıyor. İnternet yokken de '
-                  'çalışır, bağlanınca eşitlenir. Yedek almak yine de iyi bir alışkanlık.',
+                  'çalışır, bağlanınca eşitlenir.',
                   style: TextStyle(color: colors.onSurfaceVariant),
                 ),
-              ),
-              ListTile(
-                leading: const Icon(Icons.ios_share),
-                title: const Text('Yedeği dışa aktar'),
-                onTap: () => _export(context, store),
-              ),
-              ListTile(
-                leading: const Icon(Icons.file_open_outlined),
-                title: const Text('Yedekten yükle'),
-                onTap: () => _import(context, store),
               ),
               ListTile(
                 leading: Icon(Icons.delete_outline, color: context.keseColors.danger),

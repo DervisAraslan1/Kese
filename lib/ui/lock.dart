@@ -4,7 +4,7 @@ import '../core/phone.dart';
 import 'widgets.dart';
 
 /// How long the app may stay in the background before it locks again. Long
-/// enough that sharing a backup or picking a file does not trigger it.
+/// enough that a glance at another app does not trigger it.
 const lockGrace = Duration(seconds: 30);
 
 /// Covers the whole app, dialogs and sheets included, so a locked screen shows
