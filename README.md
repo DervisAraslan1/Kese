@@ -128,3 +128,7 @@ Anahtar kaybolursa uygulama güncellenemez, kullanıcıların silip yeniden kurm
 ## Veriler
 
 Veriler hesabında durduğu için uygulamayı silmek ya da telefon değiştirmek onları silmez; aynı hesapla girince geri gelir. **Tümünü sil** hesaptaki verileri de siler.
+
+## Lisans
+
+MIT. Ayrıntılar [LICENSE](LICENSE) dosyasında.
