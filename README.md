@@ -2,6 +2,8 @@
 
 Harcamanı tek satırda yaz, paranın nereye gittiğini gör. Kişisel bütçe takibi için Android uygulaması. Verilerin kendi hesabında saklanır ve internet yokken de çalışır.
 
+![Kese ekranları: bu ay, öneriler, işlemler, analiz](docs/ekranlar.png)
+
 ## İndir
 
 APK: [dervisaraslan1.github.io/indirmeler](https://dervisaraslan1.github.io/indirmeler/). Mağazada değil, elden kurulur.
