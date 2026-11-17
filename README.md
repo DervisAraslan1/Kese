@@ -2,6 +2,10 @@
 
 Harcamanı tek satırda yaz, paranın nereye gittiğini gör. Kişisel bütçe takibi için Android uygulaması. Verilerin kendi hesabında saklanır ve internet yokken de çalışır.
 
+## İndir
+
+APK: [dervisaraslan1.github.io/indirmeler](https://dervisaraslan1.github.io/indirmeler/). Mağazada değil, elden kurulur.
+
 ## Hesap ve eşitleme
 
 Uygulama girişle açılır: e-posta ve şifreyle ya da Google hesabınla. Veriler Firebase'de (Firestore) hesabına bağlı durur; telefon değiştirince ya da uygulamayı silip kurunca giriş yapman yeterlidir.
