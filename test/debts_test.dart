@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:kese/core/date.dart';
 import 'package:kese/core/insights.dart';
+import 'package:kese/core/kese.dart';
 import 'package:kese/core/models.dart';
 import 'package:kese/core/parse.dart';
 import 'package:kese/core/plans.dart';
@@ -191,8 +192,20 @@ void main() {
       final id = store.addDebt(DebtKind.owed, 'Ali', 100000).id;
       store.payDebt(id, 500000);
       expect(store.data.debts.single.settled, isTrue);
-      store.payDebt(id, -900000);
+      expect(store.data.debts.single.paid, 100000);
+      expect(store.payDebt(id, 100), isNull, reason: 'nothing left to pay');
+      expect(store.payDebt(id, -5000), isNull);
+    });
+
+    test('a payment entered by mistake can be removed and brought back', () {
+      final store = storeWith([]);
+      final id = store.addDebt(DebtKind.owed, 'Ali', 100000).id;
+      store.payDebt(id, 30000);
+      final payment = store.data.debts.single.payments.single;
+      final undo = store.removePayment(id, payment.id)!;
       expect(store.data.debts.single.paid, 0);
+      undo.revert();
+      expect(store.data.debts.single.paid, 30000);
     });
 
     test('undo reverts only the change it made', () {
@@ -204,11 +217,12 @@ void main() {
       expect(store.data.debts.single.paid, 20000);
     });
 
-    test('lowering the amount below what was paid closes it', () {
+    test('the amount never drops below what was paid', () {
       final store = storeWith([]);
       final id = store.addDebt(DebtKind.owed, 'Ali', 100000).id;
       store.payDebt(id, 80000);
       store.updateDebt(id, kind: DebtKind.owed, title: 'Ali', amount: 50000, due: null);
+      expect(store.data.debts.single.amount, 80000);
       expect(store.data.debts.single.settled, isTrue);
     });
 
@@ -230,6 +244,163 @@ void main() {
       expect(titles(), ['“Veli” alacağı gecikti', '“Ali” borcu yaklaşıyor']);
       store.payDebt(id, 100000);
       expect(titles(), ['“Veli” alacağı gecikti']);
+    });
+  });
+
+  group('kese', () {
+    int month(Store s) => monthKese(s.data, today).kese;
+    int overall(Store s) => overallKese(s.data, today).kese;
+
+    test('a loan given leaves the kese and comes back when collected', () {
+      final store = storeWith([tx(today, 'Maaş', 30000, type: TxType.income)]);
+      expect(month(store), 3000000);
+      final id = store.addDebt(DebtKind.owed, 'Ali', 100000).id;
+      expect(month(store), 2900000);
+      store.payDebt(id, 40000);
+      expect(month(store), 2940000);
+      store.payDebt(id, 60000);
+      expect(month(store), 3000000);
+    });
+
+    test('a loan taken enters the kese only when ticked', () {
+      final store = storeWith([]);
+      store.addDebt(DebtKind.owe, 'Eski', 50000);
+      expect(month(store), 0, reason: 'an old debt is already in the kese');
+      final id = store.addDebt(DebtKind.owe, 'Veli', 100000, kese: true).id;
+      expect(month(store), 100000);
+      store.payDebt(id, 30000);
+      expect(month(store), 70000);
+    });
+
+    test('an unticked payment is recorded but leaves the kese alone', () {
+      final store = storeWith([]);
+      final id = store.addDebt(DebtKind.owed, 'Ali', 100000, kese: false).id;
+      store.payDebt(id, 100000, kese: false);
+      expect(store.data.debts.single.settled, isTrue);
+      expect(month(store), 0);
+    });
+
+    test('debts stay out of income, spending, categories and limits', () {
+      final store = storeWith([tx(today, 'Market', 200, category: Category.market)])
+        ..setLimit(Category.market, 100000);
+      final id = store.addDebt(DebtKind.owed, 'Ali', 500000).id;
+      store.payDebt(id, 100000);
+      store.addDebt(DebtKind.owe, 'Veli', 500000, kese: true);
+      final totals = monthKese(store.data, today);
+      expect(totals.spent, 20000);
+      expect(totals.earned, 0);
+      expect(store.transactions.length, 1);
+      expect(
+        buildInsights(store.data, today).where((i) => i.kind == InsightKind.limit),
+        isEmpty,
+        reason: 'market spending is still under its limit',
+      );
+    });
+
+    test('a loan counts in the month it happened', () {
+      final store = storeWith([]);
+      final id = store
+          .addDebt(DebtKind.owed, 'Ali', 100000, date: addDays(today, -40))
+          .id;
+      expect(month(store), 0, reason: 'lent last month');
+      expect(overall(store), -100000);
+      store.payDebt(id, 60000);
+      expect(month(store), 60000, reason: 'collected this month');
+      expect(overall(store), -40000);
+    });
+
+    test('the overall kese adds up everything and can be corrected', () {
+      final store = storeWith([
+        tx(addDays(today, -40), 'Maaş', 30000, type: TxType.income),
+        tx(today, 'Market', 1000),
+      ]);
+      expect(overall(store), 2900000);
+      final undo = store.adjustKese(5000000);
+      expect(overall(store), 5000000);
+      expect(monthKese(store.data, today).spent, 100000, reason: 'statistics stay');
+      store.addDebt(DebtKind.owed, 'Ali', 100000);
+      expect(overall(store), 4900000, reason: 'the correction keeps up with new entries');
+      undo.revert();
+      expect(overall(store), 2800000);
+    });
+
+    test('open loans are totalled whatever the tick', () {
+      final store = storeWith([]);
+      final id = store.addDebt(DebtKind.owed, 'Ali', 100000, kese: false).id;
+      store.payDebt(id, 25000);
+      store.addDebt(DebtKind.owe, 'Veli', 40000);
+      final open = openDebts(store.data);
+      expect(open.owed, 75000);
+      expect(open.owe, 40000);
+    });
+
+    test('removing a payment puts its money back where it was', () {
+      final store = storeWith([]);
+      final id = store.addDebt(DebtKind.owed, 'Ali', 100000).id;
+      store.payDebt(id, 100000);
+      expect(month(store), 0);
+      store.removePayment(id, store.data.debts.single.payments.single.id);
+      expect(month(store), -100000);
+    });
+  });
+
+  group('eski borç kaydı', () {
+    Map<String, Object?> v2(Map<String, Object?> debt) => {
+          'version': 2,
+          'transactions': [tx(today, 'Maaş', 30000, type: TxType.income).toJson()],
+          'debts': [debt],
+        };
+
+    test('comes in unticked, so the kese does not move', () {
+      final data = AppData.fromJson(jsonDecode(jsonEncode(v2({
+        'id': 'd1',
+        'kind': 'owed',
+        'title': 'Ali',
+        'amount': 150000,
+        'paid': 50000,
+        'due': null,
+        'createdAt': '2026-10-02T10:00:00.000',
+      }))));
+      final debt = data.debts.single;
+      expect(debt.kese, isFalse);
+      expect(debt.date, '2026-10-02');
+      expect(debt.paid, 50000);
+      expect(debt.payments.single.kese, isFalse);
+      expect(debt.remaining, 100000);
+      expect(monthKese(data, today).kese, 3000000);
+      expect(overallKese(data, today).kese, 3000000);
+    });
+
+    test('is written in the new shape and reads back the same', () {
+      final store = storeWith([]);
+      final old = AppData.fromJson(jsonDecode(jsonEncode(v2({
+        'id': 'd1',
+        'kind': 'owe',
+        'title': 'Veli',
+        'amount': 100000,
+        'paid': 0,
+        'createdAt': '2026-09-15T08:00:00.000',
+      }))));
+      store.data.debts = old.debts;
+      final again = AppData.fromJson(documentOf(store));
+      expect(documentOf(store)['version'], 3);
+      expect(again.debts.single.date, '2026-09-15');
+      expect(again.debts.single.payments, isEmpty);
+      expect(again.debts.single.kese, isFalse);
+    });
+
+    test('a broken old record is still rejected', () {
+      expect(
+        () => AppData.fromJson(v2({
+          'id': 'd1',
+          'kind': 'owe',
+          'title': 'Veli',
+          'amount': 100000,
+          'paid': 200000,
+          'createdAt': '2026-09-15T08:00:00.000',
+        })),
+        throwsFormatException,
+      );
     });
   });
 
@@ -301,7 +472,11 @@ void main() {
       expectRejected((j) => first(j)['planCount'] = 99);
       expectRejected((j) => first(j).remove('planIndex'));
       expectRejected((j) => first(j)['type'] = 'income');
-      expectRejected((j) => debt(j)['paid'] = 200000);
+      expectRejected((j) => debt(j)['payments'] = [
+            {'id': 'p', 'amount': 200000, 'date': today, 'kese': true},
+          ]);
+      expectRejected((j) => debt(j)['kese'] = 'evet');
+      expectRejected((j) => debt(j)['date'] = '2026-13-01');
       expectRejected((j) => debt(j)['kind'] = 'yok');
       expectRejected((j) => debt(j)['due'] = '2026-02-31');
     });

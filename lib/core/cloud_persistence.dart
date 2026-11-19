@@ -15,6 +15,7 @@ const cloudCollections = ['transactions', 'goals', 'debts'];
 /// Choices that belong to the phone and never leave it: a lock or a reminder
 /// switched on here must not appear on another phone.
 const _deviceKeys = [
+  'keseView',
   'lockEnabled',
   'notifyPayments',
   'notifyLimits',

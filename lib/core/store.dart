@@ -6,6 +6,7 @@ import 'package:flutter/foundation.dart'
 
 import 'date.dart';
 import 'insights.dart';
+import 'kese.dart';
 import 'models.dart';
 import 'money.dart';
 import 'parse.dart';
@@ -409,19 +410,37 @@ class Store extends ChangeNotifier {
     });
   }
 
-  Debt addDebt(DebtKind kind, String title, int amount, {String? due}) {
+  /// A loan given ([DebtKind.owed]) leaves the kese unless [kese] is turned
+  /// off; a loan taken enters it only when [kese] is on. Quick entry uses
+  /// these defaults.
+  Debt addDebt(
+    DebtKind kind,
+    String title,
+    int amount, {
+    String? due,
+    String? date,
+    String? note,
+    bool? kese,
+  }) {
     final debt = Debt(
       id: _newId(),
       kind: kind,
       title: title,
       amount: amount,
-      paid: 0,
+      date: date ?? today,
+      kese: kese ?? kind == DebtKind.owed,
       due: due,
+      note: _cleanNote(note),
       createdAt: _clock().toIso8601String(),
     );
     _data.debts = [..._data.debts, debt];
     _changed();
     return debt;
+  }
+
+  static String? _cleanNote(String? note) {
+    final trimmed = note?.trim();
+    return trimmed == null || trimmed.isEmpty ? null : trimmed;
   }
 
   Debt? _debt(String id) {
@@ -438,39 +457,69 @@ class Store extends ChangeNotifier {
     _changed();
   }
 
-  /// Lowering the amount below what was paid closes the debt.
-  void updateDebt(
+  /// The amount never drops below what was already paid.
+  Undo? updateDebt(
     String id, {
     required DebtKind kind,
     required String title,
     required int amount,
     required String? due,
+    String? date,
+    String? note,
+    bool? kese,
   }) {
     final debt = _debt(id);
-    if (debt == null) return;
-    _putDebt(Debt(
-      id: id,
+    if (debt == null) return null;
+    _putDebt(debt.copyWith(
       kind: kind,
       title: title,
-      amount: amount,
-      paid: debt.paid > amount ? amount : debt.paid,
-      due: due,
-      createdAt: debt.createdAt,
+      amount: amount < debt.paid ? debt.paid : amount,
+      date: date,
+      kese: kese,
+      due: () => due,
+      note: () => _cleanNote(note),
     ));
+    return Undo('“$title” güncellendi', () {
+      if (_debt(id) != null) _putDebt(debt.copyWith(payments: _debt(id)!.payments));
+    });
   }
 
-  /// A negative [amount] corrects a payment; the total stays within the debt.
-  Undo? payDebt(String id, int amount) {
+  /// Records money collected on a loan given, or paid back on a loan taken,
+  /// capped at what is left. With [kese] on it moves the kese: in when
+  /// collected, out when paid.
+  Undo? payDebt(String id, int amount, {bool kese = true, String? date}) {
     final debt = _debt(id);
-    if (debt == null) return null;
-    final paid = (debt.paid + amount).clamp(0, debt.amount);
-    final change = paid - debt.paid;
-    _putDebt(debt.copyWith(paid: paid));
-    return Undo('“${debt.title}” güncellendi', () {
-      final current = _debt(id);
-      if (current != null) {
-        _putDebt(current.copyWith(paid: (current.paid - change).clamp(0, current.amount)));
-      }
+    if (debt == null || amount <= 0 || debt.settled) return null;
+    final payment = DebtPayment(
+      id: _newId(),
+      amount: amount > debt.remaining ? debt.remaining : amount,
+      date: date ?? today,
+      kese: kese,
+    );
+    _putDebt(debt.copyWith(payments: [...debt.payments, payment]));
+    return Undo('“${debt.title}” güncellendi', () => _dropPayment(id, payment.id));
+  }
+
+  void _dropPayment(String debtId, String paymentId) {
+    final current = _debt(debtId);
+    if (current == null) return;
+    _putDebt(current.copyWith(payments: [
+      for (final p in current.payments)
+        if (p.id != paymentId) p,
+    ]));
+  }
+
+  /// Takes back a payment entered by mistake.
+  Undo? removePayment(String debtId, String paymentId) {
+    final debt = _debt(debtId);
+    final payment = debt?.payments.where((p) => p.id == paymentId).firstOrNull;
+    if (debt == null || payment == null) return null;
+    _dropPayment(debtId, paymentId);
+    return Undo('Ödeme silindi', () {
+      final current = _debt(debtId);
+      if (current == null || current.payments.any((p) => p.id == paymentId)) return;
+      if (current.paid + payment.amount > current.amount) return;
+      _putDebt(current.copyWith(payments: [...current.payments, payment]));
     });
   }
 
@@ -489,6 +538,24 @@ class Store extends ChangeNotifier {
     });
   }
 
+  void setKeseView(KeseView view) {
+    _data.keseView = view;
+    _changed();
+  }
+
+  /// Makes the overall kese show [actual], the money really on hand. Only the
+  /// difference is kept; income and spending do not change.
+  Undo adjustKese(int actual) {
+    final before = _data.keseAdjust;
+    final shown = overallKese(_data, today).kese;
+    _data.keseAdjust = (before + actual - shown).clamp(-maxAmount, maxAmount);
+    _changed();
+    return Undo('Kese düzeltildi', () {
+      _data.keseAdjust = before;
+      _changed();
+    });
+  }
+
   /// A fresh start keeps the choices that belong to the phone, not the data.
   AppData _freshData({List<Transaction>? transactions, bool demo = false}) => AppData(
         transactions: transactions,
@@ -498,6 +565,7 @@ class Store extends ChangeNotifier {
         notifyLimits: _data.notifyLimits,
         notifyEvening: _data.notifyEvening,
         theme: _data.theme,
+        keseView: _data.keseView,
         onboarded: true,
         demo: demo,
       );
@@ -520,7 +588,11 @@ class Store extends ChangeNotifier {
           kind: DebtKind.owed,
           title: 'Ali',
           amount: 150000,
-          paid: 50000,
+          date: addDays(today, -20),
+          kese: true,
+          payments: [
+            DebtPayment(id: 'demo-odeme', amount: 50000, date: addDays(today, -6), kese: true),
+          ],
           createdAt: _clock().toIso8601String(),
         ),
       ];

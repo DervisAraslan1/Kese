@@ -160,17 +160,64 @@ enum DebtKind {
   final String label;
 }
 
-/// Money owed between people. Like a goal it stays outside the month's budget:
-/// borrowing is not income and paying it back is not spending.
+/// One payment toward a debt: money collected on a loan given, or paid back on
+/// a loan taken.
+class DebtPayment {
+  const DebtPayment({
+    required this.id,
+    required this.amount,
+    required this.date,
+    required this.kese,
+  });
+
+  final String id;
+
+  /// Positive whole kuruş.
+  final int amount;
+
+  /// Local calendar day, YYYY-MM-DD.
+  final String date;
+
+  /// Whether the money went through the kese: in when collected, out when
+  /// paid back.
+  final bool kese;
+
+  Map<String, Object?> toJson() => {'id': id, 'amount': amount, 'date': date, 'kese': kese};
+
+  factory DebtPayment.fromJson(Object? json) {
+    if (json is! Map) throw const FormatException('Ödeme kaydı okunamadı.');
+    final id = json['id'];
+    final amount = json['amount'];
+    final date = json['date'];
+    final kese = json['kese'];
+    final valid = id is String &&
+        id.isNotEmpty &&
+        amount is int &&
+        amount > 0 &&
+        amount <= maxAmount &&
+        date is String &&
+        isDateKey(date) &&
+        kese is bool;
+    if (!valid) throw const FormatException('Ödeme kaydı geçersiz.');
+    return DebtPayment(id: id, amount: amount, date: date, kese: kese);
+  }
+}
+
+/// Money owed between people. It never becomes a transaction, so it stays out
+/// of income, spending, category charts and limits. It moves the kese only
+/// where the user ticked it: the loan itself ([kese]) and each payment.
 class Debt {
   const Debt({
     required this.id,
     required this.kind,
     required this.title,
     required this.amount,
-    required this.paid,
+    required this.date,
     required this.createdAt,
+    this.kese = false,
+    this.payments = const [],
     this.due,
+    this.note,
   });
 
   final String id;
@@ -179,22 +226,55 @@ class Debt {
 
   /// Whole kuruş.
   final int amount;
-  final int paid;
+
+  /// The day the money was lent or borrowed, YYYY-MM-DD.
+  final String date;
+
+  /// Whether the loan went through the kese: out when lent, in when borrowed.
+  /// Off for old debts entered after the fact.
+  final bool kese;
+  final List<DebtPayment> payments;
 
   /// Local calendar day, YYYY-MM-DD. Most debts between friends have none.
   final String? due;
+  final String? note;
   final String createdAt;
 
+  int get paid => payments.fold(0, (sum, p) => sum + p.amount);
   bool get settled => paid >= amount;
   int get remaining => amount - paid;
 
-  Debt copyWith({int? paid}) => Debt(
+  /// How much this debt moved the kese on the days [counts] accepts.
+  int keseFlow(bool Function(String date) counts) {
+    // Lent money leaves the kese and comes back; borrowed money the reverse.
+    final sign = kind == DebtKind.owed ? -1 : 1;
+    var flow = kese && counts(date) ? sign * amount : 0;
+    for (final p in payments) {
+      if (p.kese && counts(p.date)) flow -= sign * p.amount;
+    }
+    return flow;
+  }
+
+  Debt copyWith({
+    DebtKind? kind,
+    String? title,
+    int? amount,
+    String? date,
+    bool? kese,
+    List<DebtPayment>? payments,
+    String? Function()? due,
+    String? Function()? note,
+  }) =>
+      Debt(
         id: id,
-        kind: kind,
-        title: title,
-        amount: amount,
-        paid: paid ?? this.paid,
-        due: due,
+        kind: kind ?? this.kind,
+        title: title ?? this.title,
+        amount: amount ?? this.amount,
+        date: date ?? this.date,
+        kese: kese ?? this.kese,
+        payments: payments ?? this.payments,
+        due: due == null ? this.due : due(),
+        note: note == null ? this.note : note(),
         createdAt: createdAt,
       );
 
@@ -203,20 +283,27 @@ class Debt {
         'kind': kind.name,
         'title': title,
         'amount': amount,
-        'paid': paid,
+        'date': date,
+        'kese': kese,
+        'payments': payments.map((p) => p.toJson()).toList(),
         'due': due,
+        'note': note,
         'createdAt': createdAt,
       };
 
+  /// Also reads the version 2 record, which kept only a total `paid`. Those
+  /// debts were outside the kese then, so they come in unticked and the kese
+  /// does not change.
   factory Debt.fromJson(Object? json) {
     if (json is! Map) throw const FormatException('Borç kaydı okunamadı.');
     final id = json['id'];
     final kind = DebtKind.values.asNameMap()[json['kind']];
     final title = json['title'];
     final amount = json['amount'];
-    final paid = json['paid'];
     final due = json['due'];
+    final note = json['note'];
     final createdAt = json['createdAt'];
+    final created = createdAt is String ? DateTime.tryParse(createdAt) : null;
     final valid = id is String &&
         id.isNotEmpty &&
         kind != null &&
@@ -225,24 +312,57 @@ class Debt {
         amount is int &&
         amount > 0 &&
         amount <= maxAmount &&
-        paid is int &&
-        paid >= 0 &&
-        paid <= amount &&
         (due == null || (due is String && isDateKey(due))) &&
-        createdAt is String &&
-        DateTime.tryParse(createdAt) != null;
+        (note == null || note is String) &&
+        created != null;
     if (!valid) throw const FormatException('Borç kaydı geçersiz.');
+
+    final String date;
+    final bool kese;
+    final List<DebtPayment> payments;
+    if (json.containsKey('payments')) {
+      final rawDate = json['date'];
+      final rawKese = json['kese'];
+      final rawPayments = json['payments'];
+      if (rawDate is! String || !isDateKey(rawDate) || rawKese is! bool || rawPayments is! List) {
+        throw const FormatException('Borç kaydı geçersiz.');
+      }
+      date = rawDate;
+      kese = rawKese;
+      payments = rawPayments.map(DebtPayment.fromJson).toList();
+      if (payments.map((p) => p.id).toSet().length != payments.length) {
+        throw const FormatException('Borç kaydı geçersiz.');
+      }
+    } else {
+      final paid = json['paid'];
+      if (paid is! int || paid < 0) throw const FormatException('Borç kaydı geçersiz.');
+      date = toKey(created);
+      kese = false;
+      payments = [
+        if (paid > 0) DebtPayment(id: '$id-eski', amount: paid, date: date, kese: false),
+      ];
+    }
+    if (payments.fold(0, (sum, p) => sum + p.amount) > amount) {
+      throw const FormatException('Borç kaydı geçersiz.');
+    }
+    final trimmedNote = (note as String?)?.trim();
     return Debt(
       id: id,
       kind: kind,
       title: title,
       amount: amount,
-      paid: paid,
+      date: date,
+      kese: kese,
+      payments: payments,
       due: due as String?,
-      createdAt: createdAt,
+      note: trimmedNote == null || trimmedNote.isEmpty ? null : trimmedNote,
+      createdAt: createdAt as String,
     );
   }
 }
+
+/// What the kese shows when the switch on top of it says "Bu ay" or "Genel".
+enum KeseView { month, overall }
 
 class SavingsGoal {
   const SavingsGoal({
@@ -352,6 +472,8 @@ class AppData {
     List<Debt>? debts,
     Set<String>? notified,
     this.customColors,
+    this.keseAdjust = 0,
+    this.keseView = KeseView.month,
     this.lockEnabled = false,
     this.notifyPayments = false,
     this.notifyLimits = false,
@@ -367,7 +489,8 @@ class AppData {
         feedback = feedback ?? {},
         dismissed = dismissed ?? {};
 
-  static const version = 2;
+  /// 3: debts carry a date, a note, the kese tick and dated payments.
+  static const version = 3;
 
   List<Transaction> transactions;
   Map<Category, int> limits;
@@ -381,6 +504,13 @@ class AppData {
   /// Limit alerts already sent, so each fires once a month.
   Set<String> notified;
   CustomColors? customColors;
+
+  /// What "Keseyi düzelt" added so the overall kese matches the money really
+  /// on hand. Never income or spending.
+  int keseAdjust;
+
+  /// The switch on top of the kese; it belongs to the phone.
+  KeseView keseView;
   bool lockEnabled;
   bool notifyPayments;
   bool notifyLimits;
@@ -401,6 +531,8 @@ class AppData {
         'debts': debts.map((d) => d.toJson()).toList(),
         'notified': notified.toList(),
         'customColors': customColors?.toJson(),
+        'keseAdjust': keseAdjust,
+        'keseView': keseView.name,
         'lockEnabled': lockEnabled,
         'notifyPayments': notifyPayments,
         'notifyLimits': notifyLimits,
@@ -441,6 +573,8 @@ class AppData {
       customColors: json['customColors'] == null
           ? null
           : CustomColors.fromJson(json['customColors']),
+      keseAdjust: _readAdjust(json['keseAdjust']),
+      keseView: KeseView.values.asNameMap()[json['keseView']] ?? KeseView.month,
       lockEnabled: json['lockEnabled'] == true,
       notifyPayments: json['notifyPayments'] == true,
       notifyLimits: json['notifyLimits'] == true,
@@ -449,6 +583,14 @@ class AppData {
       onboarded: json['onboarded'] == true,
       demo: json['demo'] == true,
     );
+  }
+
+  static int _readAdjust(Object? raw) {
+    if (raw == null) return 0;
+    if (raw is! int || raw.abs() > maxAmount) {
+      throw const FormatException('Kese düzeltmesi geçersiz.');
+    }
+    return raw;
   }
 
   static List<SavingsGoal> _readGoals(Object? raw) {

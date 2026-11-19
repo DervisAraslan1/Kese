@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart' show Color;
 
 import '../core/date.dart';
+import '../core/kese.dart';
 import '../core/models.dart';
 import '../core/money.dart';
 import '../core/phone.dart';
@@ -20,9 +21,7 @@ String _hex(Color color) =>
 /// the widget is on show to anyone holding the phone.
 WidgetSnapshot buildWidgetSnapshot(AppData data, String today, {bool signedOut = false}) {
   final month = monthOf(today);
-  final left = data.transactions
-      .where((t) => monthOf(t.date) == month)
-      .fold(0, (sum, t) => sum + (t.isExpense ? -t.amount : t.amount));
+  final left = monthKese(data, today).kese;
   final theme = resolveTheme(data);
   return WidgetSnapshot(
     title: formatMonth(month),

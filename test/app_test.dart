@@ -204,7 +204,8 @@ void main() {
     await tester.tap(find.text('ali'));
     await tester.pumpAndSettle();
     await tester.enterText(find.widgetWithText(TextField, 'Tutar'), '400');
-    await tester.tap(find.text('Ödeme ekle'));
+    await tester.pump();
+    await tester.tap(find.text('400 ₺ tahsil edildi'));
     await tester.pumpAndSettle();
     expect(store.data.debts.single.remaining, 60000);
     await tester.pump(const Duration(seconds: 6));
@@ -212,7 +213,7 @@ void main() {
 
     await tester.tap(find.text('ali'));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('Tamamını kapat'));
+    await tester.tap(find.text('Tamamı tahsil edildi'));
     await tester.pumpAndSettle();
     expect(store.data.debts.single.settled, isTrue);
     expect(find.text('Kapandı'), findsOneWidget);
@@ -222,8 +223,8 @@ void main() {
   testWidgets('the debt dialog validates, then saves with a kind', (tester) async {
     final store = makeStore()..startEmpty();
     await pumpApp(tester, store);
-    await bringIntoView(tester, find.byTooltip('Yeni borç veya alacak'));
-    await tester.tap(find.byTooltip('Yeni borç veya alacak'));
+    await bringIntoView(tester, find.byTooltip('Yeni borç'));
+    await tester.tap(find.byTooltip('Yeni borç'));
     await tester.pumpAndSettle();
 
     await tester.tap(find.text('Kaydet'));
@@ -231,13 +232,40 @@ void main() {
     expect(find.text('Kimle olduğunu yaz.'), findsOneWidget);
     expect(store.data.debts, isEmpty);
 
-    await tester.tap(find.text('Borcum'));
-    await tester.enterText(find.widgetWithText(TextField, 'Kişi veya açıklama'), 'Veli');
+    expect(
+      tester.widget<CheckboxListTile>(find.byType(CheckboxListTile)).value,
+      isFalse,
+      reason: 'a debt taken does not enter the kese unless ticked',
+    );
+    await tester.enterText(find.widgetWithText(TextField, 'Kişi'), 'Veli');
     await tester.enterText(find.widgetWithText(TextField, 'Tutar'), '2.500');
+    await tester.tap(find.text('Keseye ekle'));
     await tester.tap(find.text('Kaydet'));
     await tester.pumpAndSettle();
     expect(store.data.debts.single.kind, DebtKind.owe);
     expect(store.data.debts.single.amount, 250000);
+    expect(store.data.debts.single.kese, isTrue);
+    expect(find.text('Borçlarım'), findsOneWidget);
+  });
+
+  testWidgets('the kese switches to Genel and can be corrected', (tester) async {
+    final store = makeStore()..startEmpty();
+    await pumpApp(tester, store);
+    expect(find.text('Bu ay kalan'), findsOneWidget);
+
+    await tester.tap(find.text('Genel'));
+    await tester.pumpAndSettle();
+    expect(store.data.keseView, KeseView.overall);
+    expect(find.text('Kesede'), findsOneWidget);
+    expect(find.text('Net durum'), findsOneWidget);
+
+    await tester.tap(find.text('Keseyi düzelt'));
+    await tester.pumpAndSettle();
+    await tester.enterText(find.widgetWithText(TextField, 'Elindeki para'), '12.500');
+    await tester.tap(find.text('Kaydet'));
+    await tester.pumpAndSettle();
+    expect(store.data.keseAdjust, 1250000);
+    expect(store.transactions, isEmpty, reason: 'a correction is not income');
   });
 
   testWidgets('every tab renders the demo data without overflow', (tester) async {

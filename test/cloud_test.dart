@@ -65,7 +65,8 @@ class FakeBackend implements CloudBackend {
       items[collection] = {for (final item in list.cast<Json>()) item['id'] as String: item};
     }
     profile = document
-      ..removeWhere((key, _) => key.startsWith('notif') || key == 'lockEnabled');
+      ..removeWhere(
+          (key, _) => key.startsWith('notif') || key == 'lockEnabled' || key == 'keseView');
   }
 }
 

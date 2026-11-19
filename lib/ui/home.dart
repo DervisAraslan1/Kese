@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../core/date.dart';
 import '../core/insights.dart';
+import '../core/kese.dart';
 import '../core/models.dart';
 import '../core/money.dart';
 import '../core/store.dart';
@@ -23,8 +24,6 @@ class HomePage extends StatelessWidget {
     final today = store.today;
     final month = monthOf(today);
     final monthly = store.transactions.where((t) => monthOf(t.date) == month).toList();
-    final spent = sumOf(monthly.where((t) => t.isExpense));
-    final earned = sumOf(monthly.where((t) => !t.isExpense));
     final forecast = forecastMonth(store.transactions, today);
     final insights = buildInsights(store.data, today);
     // Installments ahead are commitments, not things that happened.
@@ -47,12 +46,9 @@ class HomePage extends StatelessWidget {
             text: 'Kayıtlı veri okunamadı. Dosya silinmedi, kenara alındı ve yeni bir başlangıç yapıldı.',
           ),
         if (store.data.demo) const _DemoNotice(),
-        Text(
-          formatMonth(month),
-          style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant),
-        ),
+        _KeseSwitch(month: month),
         const SizedBox(height: 6),
-        _Hero(spent: spent, earned: earned, forecast: forecast),
+        _Hero(forecast: forecast),
         if (insights.isNotEmpty) ...[
           reveal(const SectionTitle('Sana özel öneriler')),
           for (final insight in insights)
@@ -100,37 +96,84 @@ class HomePage extends StatelessWidget {
   }
 }
 
-class _Hero extends StatelessWidget {
-  const _Hero({required this.spent, required this.earned, required this.forecast});
+/// "Bu ay" or "Genel" on top of the kese.
+class _KeseSwitch extends StatelessWidget {
+  const _KeseSwitch({required this.month});
 
-  final int spent;
-  final int earned;
+  final String month;
+
+  @override
+  Widget build(BuildContext context) {
+    final store = StoreScope.of(context);
+    final view = store.data.keseView;
+    return Row(
+      children: [
+        Expanded(
+          child: Text(
+            view == KeseView.month ? formatMonth(month) : 'Bugüne kadar',
+            style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant),
+          ),
+        ),
+        SegmentedButton<KeseView>(
+          showSelectedIcon: false,
+          style: const ButtonStyle(
+            visualDensity: VisualDensity.compact,
+            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+          ),
+          segments: const [
+            ButtonSegment(value: KeseView.month, label: Text('Bu ay')),
+            ButtonSegment(value: KeseView.overall, label: Text('Genel')),
+          ],
+          selected: {view},
+          onSelectionChanged: (s) => store.setKeseView(s.first),
+        ),
+      ],
+    );
+  }
+}
+
+class _Hero extends StatelessWidget {
+  const _Hero({required this.forecast});
+
   final Forecast? forecast;
 
   @override
   Widget build(BuildContext context) {
+    final store = StoreScope.of(context);
     final colors = Theme.of(context).colorScheme;
     final kese = context.keseColors;
-    final left = earned - spent;
+    final overall = store.data.keseView == KeseView.overall;
+    final month = monthKese(store.data, store.today);
+    final shown = overall ? overallKese(store.data, store.today) : month;
+    final debts = openDebts(store.data);
+    final debtFlow = month.debtIn - month.debtOut;
     final forecast = this.forecast;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         LivePouch(
-          level: pouchLevel(spent: spent, earned: earned),
-          amount: left,
+          // The pouch always follows the month: how much of what came in is left.
+          level: pouchLevel(
+            spent: month.spent + month.debtOut,
+            earned: month.earned + month.debtIn,
+          ),
+          amount: shown.kese,
           // The mask paints the text, so only its shape matters here.
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              const Text(
-                'Bu ay kalan',
-                style: TextStyle(color: Colors.white, fontWeight: FontWeight.w700, fontSize: 13),
+              Text(
+                overall ? 'Kesede' : 'Bu ay kalan',
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontWeight: FontWeight.w700,
+                  fontSize: 13,
+                ),
               ),
               FittedBox(
                 fit: BoxFit.scaleDown,
                 child: TweenAnimationBuilder<int>(
-                  tween: IntTween(end: left),
+                  tween: IntTween(end: shown.kese),
                   duration: const Duration(milliseconds: 900),
                   curve: Curves.easeOutCubic,
                   builder: (context, value, _) => Text(
@@ -154,13 +197,54 @@ class _Hero extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
+                if (!overall) ...[
+                  Row(
+                    children: [
+                      Expanded(child: _Stat('Gelir', month.earned, kese.good)),
+                      Expanded(child: _Stat('Gider', month.spent, colors.onSurface)),
+                    ],
+                  ),
+                  if (debtFlow != 0) ...[
+                    const SizedBox(height: 6),
+                    Text(
+                      'Borç ve alacak hareketleri: ${debtFlow > 0 ? '+' : '−'}${formatMoney(debtFlow.abs())}',
+                      style: TextStyle(color: colors.onSurfaceVariant, fontSize: 12.5),
+                    ),
+                  ],
+                  const SizedBox(height: 10),
+                ],
                 Row(
                   children: [
-                    Expanded(child: _Stat('Gelir', earned, kese.good)),
-                    Expanded(child: _Stat('Gider', spent, colors.onSurface)),
+                    Expanded(child: _Stat('Alacaklar', debts.owed, kese.good, small: !overall)),
+                    Expanded(
+                      child: _Stat('Borçlar', debts.owe, colors.onSurface, small: !overall),
+                    ),
+                    if (overall)
+                      Expanded(
+                        child: _Stat(
+                          'Net durum',
+                          shown.kese + debts.owed - debts.owe,
+                          colors.primary,
+                        ),
+                      ),
                   ],
                 ),
-                if (forecast != null) ...[
+                if (overall) ...[
+                  const SizedBox(height: 4),
+                  Text(
+                    'Net durum = Kese + Alacaklar − Borçlar',
+                    style: TextStyle(color: colors.onSurfaceVariant, fontSize: 12),
+                  ),
+                  Align(
+                    alignment: Alignment.centerLeft,
+                    child: TextButton.icon(
+                      style: TextButton.styleFrom(padding: EdgeInsets.zero),
+                      onPressed: () => _adjustKese(context, store, shown.kese),
+                      icon: const Icon(Icons.tune, size: 18),
+                      label: const Text('Keseyi düzelt'),
+                    ),
+                  ),
+                ] else if (forecast != null) ...[
                   const Divider(height: 24),
                   Text(
                     'Ay sonu tahmini: ${formatMoney(forecast.projected)} harcama, '
@@ -181,12 +265,87 @@ class _Hero extends StatelessWidget {
   }
 }
 
+/// Asks for the money really on hand; the overall kese then shows it.
+Future<void> _adjustKese(BuildContext context, Store store, int current) async {
+  final actual = await showDialog<int>(
+    context: context,
+    builder: (_) => _AdjustDialog(current: current),
+  );
+  if (actual == null || !context.mounted) return;
+  showUndo(context, store.adjustKese(actual));
+}
+
+/// Owns its field, which must outlive the dialog's closing animation.
+class _AdjustDialog extends StatefulWidget {
+  const _AdjustDialog({required this.current});
+
+  final int current;
+
+  @override
+  State<_AdjustDialog> createState() => _AdjustDialogState();
+}
+
+class _AdjustDialogState extends State<_AdjustDialog> {
+  late final _controller = TextEditingController(
+    text: widget.current > 0 ? amountForInput(widget.current) : '',
+  );
+  String? _error;
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  void _save() {
+    final text = _controller.text.trim();
+    final value = text == '0' ? 0 : parseAmount(text);
+    if (value == null) {
+      setState(() => _error = 'Geçerli bir tutar yaz. Örnek: 12.500');
+      return;
+    }
+    Navigator.pop(context, value);
+  }
+
+  @override
+  Widget build(BuildContext context) => AlertDialog(
+        title: const Text('Keseyi düzelt'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            const Text(
+              'Şu an elinde ne kadar para var? Kese bu tutarı gösterir. '
+              'Gelir ve gider istatistikleri değişmez.',
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: _controller,
+              autofocus: true,
+              keyboardType: const TextInputType.numberWithOptions(decimal: true),
+              decoration: InputDecoration(
+                labelText: 'Elindeki para',
+                suffixText: '₺',
+                errorText: _error,
+              ),
+              onSubmitted: (_) => _save(),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context), child: const Text('Vazgeç')),
+          TextButton(onPressed: _save, child: const Text('Kaydet')),
+        ],
+      );
+}
+
 class _Stat extends StatelessWidget {
-  const _Stat(this.label, this.amount, this.color);
+  const _Stat(this.label, this.amount, this.color, {this.small = false});
 
   final String label;
   final int amount;
   final Color color;
+  final bool small;
 
   @override
   Widget build(BuildContext context) => Column(
@@ -204,7 +363,7 @@ class _Stat extends StatelessWidget {
             style: TextStyle(
               color: color,
               fontWeight: FontWeight.w700,
-              fontSize: 16,
+              fontSize: small ? 14 : 16,
               fontFeatures: tabular,
             ),
           ),
