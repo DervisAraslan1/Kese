@@ -268,6 +268,23 @@ void main() {
     expect(store.transactions, isEmpty, reason: 'a correction is not income');
   });
 
+  testWidgets('the pouch amount can keep one color', (tester) async {
+    final store = makeStore()..startWithDemo();
+    await pumpApp(tester, store);
+    await tester.tap(find.widgetWithText(NavigationDestination, 'Ayarlar'));
+    await tester.pumpAndSettle();
+    await bringIntoView(tester, find.text('Tek renk'));
+    await tester.tap(find.text('Tek renk'));
+    await tester.pumpAndSettle();
+    expect(store.data.pouchTextBlend, isFalse);
+
+    await tester.tap(find.widgetWithText(NavigationDestination, 'Bu ay'));
+    await tester.pumpAndSettle();
+    expect(find.text('Bu ay kalan'), findsWidgets);
+    expect(tester.takeException(), isNull);
+    expect(AppData.fromJson(store.data.toJson()).pouchTextBlend, isFalse);
+  });
+
   testWidgets('every tab renders the demo data without overflow', (tester) async {
     final store = makeStore()..startWithDemo();
     await pumpApp(tester, store);

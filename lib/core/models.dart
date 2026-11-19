@@ -474,6 +474,7 @@ class AppData {
     this.customColors,
     this.keseAdjust = 0,
     this.keseView = KeseView.month,
+    this.pouchTextBlend = true,
     this.lockEnabled = false,
     this.notifyPayments = false,
     this.notifyLimits = false,
@@ -511,6 +512,11 @@ class AppData {
 
   /// The switch on top of the kese; it belongs to the phone.
   KeseView keseView;
+
+  /// The amount in the pouch changes color where the liquid reaches it; off
+  /// keeps one color with a soft halo. Part of the look, so it follows the
+  /// account like the theme.
+  bool pouchTextBlend;
   bool lockEnabled;
   bool notifyPayments;
   bool notifyLimits;
@@ -533,6 +539,7 @@ class AppData {
         'customColors': customColors?.toJson(),
         'keseAdjust': keseAdjust,
         'keseView': keseView.name,
+        'pouchTextBlend': pouchTextBlend,
         'lockEnabled': lockEnabled,
         'notifyPayments': notifyPayments,
         'notifyLimits': notifyLimits,
@@ -575,6 +582,7 @@ class AppData {
           : CustomColors.fromJson(json['customColors']),
       keseAdjust: _readAdjust(json['keseAdjust']),
       keseView: KeseView.values.asNameMap()[json['keseView']] ?? KeseView.month,
+      pouchTextBlend: json['pouchTextBlend'] != false,
       lockEnabled: json['lockEnabled'] == true,
       notifyPayments: json['notifyPayments'] == true,
       notifyLimits: json['notifyLimits'] == true,

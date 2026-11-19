@@ -114,7 +114,13 @@ Color _bestText(Color background) =>
         : Colors.black;
 
 /// The readable text color for anything drawn on [background].
-Color readableOn(Color background) => _bestText(background);
+/// Text sitting inside a colored fill, like the amount in the pouch's liquid:
+/// a deep shade of that fill instead of flat black or white, moved toward
+/// black or white only as far as contrast needs.
+Color tintedTextOn(Color background) {
+  final ink = _bestText(background);
+  return _readable(Color.lerp(background, ink, 0.55)!, ink, background);
+}
 
 /// [preferred] moved toward [ink] only as far as needed to be readable.
 Color _readable(Color preferred, Color ink, Color background) {

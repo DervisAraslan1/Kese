@@ -538,6 +538,11 @@ class Store extends ChangeNotifier {
     });
   }
 
+  void setPouchTextBlend(bool blend) {
+    _data.pouchTextBlend = blend;
+    _changed();
+  }
+
   void setKeseView(KeseView view) {
     _data.keseView = view;
     _changed();
@@ -566,6 +571,7 @@ class Store extends ChangeNotifier {
         notifyEvening: _data.notifyEvening,
         theme: _data.theme,
         keseView: _data.keseView,
+        pouchTextBlend: _data.pouchTextBlend,
         onboarded: true,
         demo: demo,
       );

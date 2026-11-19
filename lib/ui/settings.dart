@@ -169,6 +169,38 @@ class SettingsPage extends StatelessWidget {
         ),
         const SectionTitle('Tema'),
         const _ThemeGallery(),
+        const SizedBox(height: 10),
+        Card(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                const Text('Kesedeki tutar', style: TextStyle(fontWeight: FontWeight.w700)),
+                const SizedBox(height: 2),
+                Text(
+                  store.data.pouchTextBlend
+                      ? 'Sıvının değdiği yerde rengi değişir.'
+                      : 'Hep aynı renkte, hafif bir haleyle.',
+                  style: TextStyle(
+                    color: Theme.of(context).colorScheme.onSurfaceVariant,
+                    fontSize: 12.5,
+                  ),
+                ),
+                const SizedBox(height: 10),
+                SegmentedButton<bool>(
+                  showSelectedIcon: false,
+                  segments: const [
+                    ButtonSegment(value: true, label: Text('Geçişli')),
+                    ButtonSegment(value: false, label: Text('Tek renk')),
+                  ],
+                  selected: {store.data.pouchTextBlend},
+                  onSelectionChanged: (s) => store.setPouchTextBlend(s.first),
+                ),
+              ],
+            ),
+          ),
+        ),
         const SectionTitle('Bildirimler'),
         Card(
           clipBehavior: Clip.antiAlias,

@@ -1,4 +1,5 @@
 import 'dart:math' as math;
+import 'dart:ui' show ImageFilter;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
@@ -42,6 +43,7 @@ class LivePouch extends StatefulWidget {
     required this.amount,
     required this.child,
     this.height = 300,
+    this.blend = true,
   });
 
   final double level;
@@ -52,6 +54,10 @@ class LivePouch extends StatefulWidget {
   /// Sits across the pouch and changes color where the liquid reaches it.
   final Widget child;
   final double height;
+
+  /// Off: [child] keeps one color, with a soft halo that reads on both the
+  /// empty pouch and the liquid.
+  final bool blend;
 
   @override
   State<LivePouch> createState() => _LivePouchState();
@@ -168,35 +174,76 @@ class _LivePouchState extends State<LivePouch> with TickerProviderStateMixin {
                 right: width * 0.11,
                 top: textTop,
                 height: textHeight,
-                child: AnimatedBuilder(
-                  animation: _level,
-                  child: Center(child: widget.child),
-                  builder: (context, child) {
-                    final liquid = pouchColor(widget.level, colors.primary, danger);
-                    final edge =
-                        ((_liquidY(_level.value, height) - textTop) / textHeight).clamp(0.0, 1.0);
-                    return ShaderMask(
-                      blendMode: BlendMode.srcIn,
-                      shaderCallback: (bounds) => LinearGradient(
-                        begin: Alignment.topCenter,
-                        end: Alignment.bottomCenter,
-                        stops: [0, edge, edge, 1],
-                        colors: [
-                          colors.onSurface,
-                          colors.onSurface,
-                          readableOn(liquid),
-                          readableOn(liquid),
-                        ],
-                      ).createShader(bounds),
-                      child: child,
-                    );
-                  },
-                ),
+                child: widget.blend
+                    ? _blended(colors, danger, height, textTop, textHeight)
+                    : _solid(colors),
               ),
             ],
           ),
         ),
       ),
+    );
+  }
+
+  /// Changes color where the liquid reaches the text: a deep shade of the
+  /// liquid inside it instead of flat black or white.
+  Widget _blended(
+    ColorScheme colors,
+    Color danger,
+    double height,
+    double textTop,
+    double textHeight,
+  ) =>
+      AnimatedBuilder(
+        animation: _level,
+        child: Center(child: widget.child),
+        builder: (context, child) {
+          final liquid = pouchColor(widget.level, colors.primary, danger);
+          final edge =
+              ((_liquidY(_level.value, height) - textTop) / textHeight).clamp(0.0, 1.0);
+          // A short soft band instead of a hard cut: the surface moves.
+          const feather = 0.035;
+          final inLiquid = tintedTextOn(liquid);
+          return ShaderMask(
+            blendMode: BlendMode.srcIn,
+            shaderCallback: (bounds) => LinearGradient(
+              begin: Alignment.topCenter,
+              end: Alignment.bottomCenter,
+              stops: [
+                0,
+                (edge - feather).clamp(0.0, 1.0),
+                (edge + feather).clamp(0.0, 1.0),
+                1,
+              ],
+              colors: [colors.onSurface, colors.onSurface, inLiquid, inLiquid],
+            ).createShader(bounds),
+            child: child,
+          );
+        },
+      );
+
+  /// One color everywhere; a blurred copy in the surface color sits behind it
+  /// so it stays readable over the liquid too.
+  Widget _solid(ColorScheme colors) {
+    final child = Center(child: widget.child);
+    return Stack(
+      fit: StackFit.expand,
+      children: [
+        ImageFiltered(
+          imageFilter: ImageFilter.blur(sigmaX: 5, sigmaY: 5),
+          child: ColorFiltered(
+            colorFilter: ColorFilter.mode(
+              colors.surface.withValues(alpha: .85),
+              BlendMode.srcIn,
+            ),
+            child: child,
+          ),
+        ),
+        ColorFiltered(
+          colorFilter: ColorFilter.mode(colors.onSurface, BlendMode.srcIn),
+          child: child,
+        ),
+      ],
     );
   }
 }

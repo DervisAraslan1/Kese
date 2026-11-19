@@ -158,6 +158,7 @@ class _Hero extends StatelessWidget {
             earned: month.earned + month.debtIn,
           ),
           amount: shown.kese,
+          blend: store.data.pouchTextBlend,
           // The mask paints the text, so only its shape matters here.
           child: Column(
             mainAxisSize: MainAxisSize.min,
